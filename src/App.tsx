@@ -1,10 +1,15 @@
 import { Navbar } from "./components/layout/Navbar";
 import { Footer } from "./components/layout/Footer";
+import { ScrollEnvironment } from "./components/environment/ScrollEnvironment";
 import { Hero } from "./components/hero/Hero";
 import { About } from "./components/about/About";
+import { EngineeringMap } from "./components/engineering/EngineeringMap";
+import { CaseStudies } from "./components/engineering/CaseStudies";
 import { Skills } from "./components/skills/Skills";
 import { Experience } from "./components/experience/Experience";
-import { Projects } from "./components/projects/Projects";
+import { Recognition } from "./components/recognition/Recognition";
+import { SectionDivider } from "./components/SectionDivider";
+import { IndependentProjects } from "./components/projects/IndependentProjects";
 import { GitHubSection } from "./components/github/GitHubSection";
 import { Achievements } from "./components/achievements/Achievements";
 import { Education } from "./components/education/Education";
@@ -20,14 +25,19 @@ function App() {
       >
         Skip to content
       </a>
+      <ScrollEnvironment />
       <div className="noise-overlay" />
       <Navbar />
       <main>
         <Hero />
         <About />
+        <EngineeringMap />
+        <CaseStudies />
         <Skills />
         <Experience />
-        <Projects />
+        <Recognition />
+        <SectionDivider from="Professional Engineering" to="Independent Engineering" />
+        <IndependentProjects />
         <GitHubSection />
         <Achievements />
         <Education />

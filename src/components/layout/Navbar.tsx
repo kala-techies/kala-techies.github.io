@@ -3,9 +3,10 @@ import { profile } from "../../data/profile";
 
 const LINKS = [
   { href: "#about", label: "About" },
-  { href: "#skills", label: "Skills" },
+  { href: "#engineering", label: "Engineering" },
   { href: "#experience", label: "Experience" },
-  { href: "#projects", label: "Projects" },
+  { href: "#recognition", label: "Recognition" },
+  { href: "#independent-projects", label: "Projects" },
   { href: "#github", label: "GitHub" },
   { href: "#resume", label: "Resume" },
   { href: "#contact", label: "Contact" },

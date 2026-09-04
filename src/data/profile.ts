@@ -63,6 +63,8 @@ export const experience: ExperienceEntry[] = [
       "Troubleshoot complex Azure infrastructure issues spanning VNets, Private Endpoints, DNS resolution, NSGs, Load Balancers, App Services, AKS, and hybrid connectivity.",
       "Support containerized workloads on AKS — deployment troubleshooting, Ingress management, ACR image pull failures, pod scaling, and cluster-level operations.",
       "Proactive monitoring via Azure Monitor, Log Analytics, Application Insights, and Datadog, tracking AKS cluster health, Key Vault access, and Service Bus capacity across production.",
+      "Performed AKS cluster upgrades — node pool management, pod scheduling and PodDisruptionBudget validation, node draining, and troubleshooting Istio ingress gateway behavior — while navigating Azure Policy restrictions, private cluster requirements, and VM family quota constraints during upgrade planning.",
+      "Diagnosed and resolved Service Bus private endpoint and DNS resolution issues, and supported secret provisioning and network-restricted Key Vault access across development and QA environments.",
       "Contributing to operational excellence through RCA preparation and automation of repetitive tasks using PowerShell and Python.",
     ],
     tech: ["Azure", "Terraform", "AKS", "Azure DevOps", "GitHub Actions", "Datadog", "PowerShell", "Python"],
@@ -113,54 +115,191 @@ export const experience: ExperienceEntry[] = [
   },
 ];
 
-export type ClientProject = {
-  name: string;
-  client: string;
-  points: string[];
-  tech: string[];
-  impact: string[];
+export type CaseStudy = {
+  id: string;
+  category: string;
+  title: string;
+  summary: string;
+  flow: string[];
+  detail: string[];
+  groundedIn?: string;
 };
 
-export const clientProjects: ClientProject[] = [
+export const caseStudies: CaseStudy[] = [
   {
-    name: "AKS Deployment & Azure DevOps Pipelines Using Terraform",
-    client: "IUHP",
-    points: [
-      "Provisioned AKS clusters, VNETs, Subnets, NSGs, Private Endpoints, Storage Accounts, and Key Vault using Terraform for consistency and repeatability across environments.",
-      "Built Azure DevOps Pipelines to automate AKS deployments with rolling updates and zero-downtime releases, using variable groups and pipeline templates for environment-specific config.",
-      "Integrated Azure Key Vault with AKS via the CSI Secret Store driver for secure secrets injection; enforced RBAC and Pod Security Standards across the cluster.",
-      "Configured Azure Load Balancer and Ingress Controller to route traffic to microservices running in AKS.",
-      "Set up Azure Monitor and Log Analytics for end-to-end observability.",
+    id: "aks-upgrades",
+    category: "Kubernetes",
+    title: "AKS Cluster Upgrade Operations",
+    summary:
+      "Upgrading a live AKS cluster isn't just clicking 'upgrade' — it's making sure nothing scheduled on it breaks on the way through.",
+    flow: ["Existing Cluster", "Pre-Check", "Workload Analysis", "PDB / Drain Validation", "Node Pool Upgrade", "Issue Triage", "Remediation", "Validated"],
+    detail: [
+      "Reviewed node pool composition, pod scheduling, and PodDisruptionBudgets before triggering an upgrade, so draining nodes doesn't take a workload below its minimum available replicas.",
+      "Worked through Istio ingress gateway behavior during upgrades — traffic routing doesn't always survive a node cycle cleanly.",
+      "Navigated Azure Policy restrictions and private-cluster requirements that shape what an upgrade is even allowed to do.",
+      "Planned around VM family quota limits so a new node pool has somewhere to land before the old one is drained.",
+      "Kept ACR image pulls and LoadBalancer services healthy through the transition.",
     ],
-    tech: ["AKS", "Terraform", "Azure DevOps", "Key Vault", "CSI Secret Store", "Ingress"],
-    impact: ["40% reduction in deployment errors", "Improved availability via AKS auto-scaling"],
+    groundedIn: "AB InBev · IUHP (client engagement)",
   },
   {
-    name: "AWS Cloud & DevOps Automation",
-    client: "CareFirst",
-    points: [
-      "Provisioned AWS infrastructure — EC2, VPC, Application Load Balancer, and PrivateLink — using Terraform for consistent, repeatable deployments.",
-      "Configured IAM policies, AWS Network Firewall, NACLs, and Security Groups for least-privilege access and network segmentation.",
-      "Implemented hub-and-spoke network architecture using VPC Peering (regional/global/cross-account) and Transit Gateway for centralized connectivity.",
-      "Integrated CloudWatch and SNS for observability and metric-based alerting.",
-      "Collaborated with onshore teams on knowledge transfer and hand-off demos across DEV, SIT, UAT, and on-prem.",
+    id: "networking",
+    category: "Networking",
+    title: "Network Architecture: VNet to Application",
+    summary: "Every private connection in Azure is a chain — one broken link and the whole path fails silently.",
+    flow: ["VNet", "Subnet", "NSG", "Private Endpoint", "DNS Zone Link", "Application"],
+    detail: [
+      "Built hub-and-spoke topologies with VNet/VPC peering, Transit Gateway, and Private/Service Endpoints so traffic never needs to leave the private network.",
+      "NSGs and Azure Firewall rules scoped for defence-in-depth rather than one flat allow-list.",
+      "Diagnosed DNS resolution failures where a Private DNS Zone existed but wasn't linked to the right VNet — the most common reason a private endpoint 'doesn't work'.",
+      "Load Balancers and App Gateway configured to route traffic without exposing anything publicly that didn't need to be.",
     ],
-    tech: ["AWS", "EC2", "VPC", "Terraform", "CloudWatch", "SNS", "Transit Gateway"],
-    impact: ["30% improvement in deployment efficiency via automated CI/CD"],
+    groundedIn: "AB InBev · CareFirst (client engagement)",
   },
   {
-    name: "Cloud Migration: On-Premises to Azure",
-    client: "Baycare",
-    points: [
-      "Led migration of on-premises workloads to Azure — assessed dependencies, created migration plans, and coordinated cross-functional teams to minimize business disruption.",
-      "Provisioned Azure VMs, installed SQL Server, and restored on-prem databases to Azure using Azure NetApp Files for secure backup and restoration.",
-      "Established Private Endpoints between Azure Storage Accounts and VMs for secure data transfer and regulatory compliance; automated provisioning with Terraform.",
-      "Managed infrastructure and application deployment pipelines using Azure DevOps.",
-      "Engaged Microsoft Support and IAM teams to resolve critical blockers; provided post-production support.",
+    id: "service-bus",
+    category: "Messaging",
+    title: "Service Bus Connectivity",
+    summary: "A namespace, a queue, and a consumer that can't reach either — until the DNS chain is traced end to end.",
+    flow: ["Namespace", "Queue / Topic", "Private Endpoint", "DNS Zone Link", "Consumer App"],
+    detail: [
+      "Created private endpoints for Service Bus namespaces and linked them into the correct Private DNS Zone (privatelink.servicebus.windows.net).",
+      "Traced a connectivity failure down to a missing VNet link on the DNS zone — added hosts-file entries during diagnosis, then fixed the zone link as the real, permanent solution.",
+      "Validated fixes by confirming the private IP resolved correctly and that both the AMQP (5671) and HTTPS (443) ports were reachable before handing off.",
+      "Built PowerShell reporting around Service Bus entities and dead-letter queues for ongoing operational visibility.",
     ],
-    tech: ["Azure VMs", "SQL Server", "Azure NetApp Files", "Terraform", "Azure DevOps", "Private Endpoints"],
-    impact: ["75% reduction in manual deployment intervention"],
+    groundedIn: "AB InBev",
   },
+  {
+    id: "security-governance",
+    category: "Security",
+    title: "Secrets & Governance",
+    summary: "Secure → Govern → Remediate → Validate — access to a secret should always be able to answer 'why'.",
+    flow: ["Application", "Identity & RBAC", "Secret Request", "Network-Restricted Key Vault", "Policy Check", "Remediation", "Validated"],
+    detail: [
+      "Provisioned and network-restricted Key Vaults — private endpoints only, no public access, RBAC over access policies.",
+      "Supported secret creation and rotation across development and QA environments, including monitoring for upcoming secret expirations.",
+      "Worked through Azure Policy-driven governance and compliance checks, including legacy-authentication remediation on App Services and Function Apps, with resource-specific exceptions where a control genuinely didn't apply.",
+      "Applied the same least-privilege IAM/RBAC discipline across both Azure and AWS environments.",
+    ],
+    groundedIn: "AB InBev · Cognizant",
+  },
+  {
+    id: "automation",
+    category: "Automation",
+    title: "From Manual Operations to Automated Reporting",
+    summary: "If I've done it by hand twice, the third time it's a script.",
+    flow: ["Manual Operation", "Repetitive Task Identified", "PowerShell Script", "Validation", "Structured Report", "Efficiency Gain"],
+    detail: [
+      "Automated Azure resource inventory, VM information, and VNet/subnet documentation into structured CSV/Excel reports instead of manual tracking.",
+      "Led a boot-diagnostics migration and storage account decommissioning effort end to end, closing out a multi-step infrastructure cleanup.",
+      "Built PowerShell tooling around Service Bus policy and entity reporting, and Python automation for PR compliance audit tracking — cutting manual tracking effort by 40%.",
+      "Reusable Terraform modules and pipeline templates so a new environment is provisioned the same way every time, not re-typed.",
+    ],
+    groundedIn: "AB InBev · Cognizant",
+  },
+  {
+    id: "incident-lifecycle",
+    category: "Production Engineering",
+    title: "Production Incident Lifecycle",
+    summary: "Detect → Investigate → Assess → Remediate → Validate → Document — and make sure it doesn't happen the same way twice.",
+    flow: ["Detect", "Investigate", "Identify Dependency", "Assess Impact", "Remediate", "Validate", "Document", "Prevent Recurrence"],
+    detail: [
+      "Monitoring across Azure Monitor, Log Analytics, Application Insights, and Datadog to catch production issues early.",
+      "Coordinated fast-turnaround fixes for production application issues affecting business-critical workflows, working directly with the teams whose processes depended on them.",
+      "RCA preparation and change-management discipline so a fix is documented, not just applied.",
+      "Change execution through Azure DevOps and GitHub Actions pipelines rather than ad-hoc manual changes, so remediation is repeatable.",
+    ],
+    groundedIn: "AB InBev",
+  },
+  {
+    id: "disaster-recovery",
+    category: "Architecture Exploration",
+    title: "AKS Disaster Recovery — Design Exploration",
+    summary:
+      "An architecture exploration into what a real AKS failover would require — not a production system, a design study of the moving parts.",
+    flow: ["Primary Region", "Replication / Sync", "Secondary Region", "Traffic Failover", "Recovery Validation", "Failback"],
+    detail: [
+      "Mapped what needs to replicate for a secondary cluster to actually be usable: container images (registry replication), configuration, secrets, and persistent data.",
+      "Considered DNS/traffic failover mechanics and what realistic RTO/RPO targets would look like for the workload.",
+      "Thought through the failback path deliberately — recovering to secondary is only half the problem; returning to primary cleanly is the other half.",
+    ],
+  },
+];
+
+export type Recommendation = {
+  name: string;
+  title: string;
+  relationship: string;
+  date: string;
+  text: string;
+};
+
+// Verbatim (light typo cleanup only) from LinkedIn recommendations, used
+// with the specific people named, per direct request.
+export const recommendations: Recommendation[] = [
+  {
+    name: "Ana Paula Malta",
+    title: "Senior Project & Product Manager",
+    relationship: "Managed Shaik directly at AB InBev",
+    date: "August 2026",
+    text: "I worked with Kalandar at AB InBev in 2025/2026. He is a committed professional, always looking to learn something that goes beyond his role. He coordinated the work of responding to budget deviations, liaising with Finance teams, and addressing infrastructure housekeeping and adjustments when necessary. He automated processes for efficiency gains, and was responsible for more than 50% of the Azure services/products configuration, ensuring SLA compliance throughout. He is a proactive professional with a sense of ownership, always willing to help. I recommend him.",
+  },
+  {
+    name: "Deiva Ganesh",
+    title: "Client Partner — Healthcare & Life Sciences",
+    relationship: "Senior colleague, did not manage Shaik directly",
+    date: "August 2026",
+    text: "Kalandar worked as an Azure Admin on the HC-BPAAS team during the IUHP pilot, migrating Facets applications from on-premises. He owned the Network Pricer component and supported deployments across Interactive, Workflow, App Server, and FOA, along with SQL installations using Azure DevOps for IUHP onto QNXT. He showed great initiative, commitment, and troubleshooting skills — fixing things in time and helping drive a successful go-live. He will add good value to any team he works with.",
+  },
+];
+
+export type Recognition = {
+  name: string;
+  title: string;
+  quote: string;
+  context: string;
+};
+
+// Generalized from internal Teams/email appreciation — ticket numbers,
+// resource names, hostnames, and contact details deliberately omitted.
+export const recognitions: Recognition[] = [
+  {
+    name: "Leonardo Souto Rodrigues Alves",
+    title: "Colleague, Global Cloud team",
+    quote: "Thank you for your help! It is working now!",
+    context: "Diagnosed a Service Bus private-endpoint DNS resolution issue blocking a colleague's environment, traced it to a missing DNS zone link, and validated connectivity end to end before handing off.",
+  },
+  {
+    name: "Manjunath K S",
+    title: "SAP Service Manager, IT Operations",
+    quote: "Thank you very much for your quick support on this! We really appreciate it.",
+    context: "Fast-turnaround support restoring a production application form used across the Africa region, coordinating with the wider ops team under time pressure.",
+  },
+  {
+    name: "Renan Tieghi Pepi",
+    title: "Cloud Tech Lead",
+    quote: "Thank you for the effort here!",
+    context: "Led an Azure boot-diagnostics migration and storage account decommissioning effort through to completion.",
+  },
+  {
+    name: "Sebastiao Graciano",
+    title: "Colleague, Global Cloud team",
+    quote: "Fully available to join calls and work directly on the problems together — collaborative approach, sense of urgency, and dedication to ensuring the activities were successfully completed.",
+    context: "Recognized for resource-creation and secrets-management support across development and QA environments.",
+  },
+];
+
+export type EngineeringMapTier = {
+  label: string;
+  nodes: string[];
+};
+
+export const engineeringMap: EngineeringMapTier[] = [
+  { label: "Azure Cloud", nodes: ["Subscription", "Resource Groups", "Azure Policy"] },
+  { label: "Platform", nodes: ["AKS", "Networking", "Security & Key Vault"] },
+  { label: "Delivery", nodes: ["Applications", "Service Bus", "App Services"] },
+  { label: "Operations", nodes: ["Monitoring", "Automation", "Incident Response"] },
 ];
 
 export type OSSProject = {
@@ -264,6 +403,19 @@ export const personalProjects: PersonalProject[] = [
       "Resume builder with JD-tailored, review-gated AI rewrite suggestions",
     ],
     status: "Actively developed · private repository",
+  },
+  {
+    name: "AP EC Voter Search",
+    tagline: "Offline voter-roll lookup, built in Flutter",
+    description:
+      "A Flutter mobile app for searching electoral-roll data entirely on-device — importing voter-roll CSV exports, running OCR against scanned roll pages, and indexing everything into a local SQLite store for fast lookup with no server round-trip.",
+    tech: ["Flutter", "Dart", "SQLite", "CSV Parsing", "OCR"],
+    highlights: [
+      "CSV ingestion into a local, searchable SQLite index",
+      "OCR pipeline for scanned roll pages",
+      "Fully offline lookup — no server dependency",
+    ],
+    status: "Independent project",
   },
 ];
 

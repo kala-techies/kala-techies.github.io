@@ -1,23 +1,12 @@
-import { Suspense, lazy, useState } from "react";
 import { motion } from "framer-motion";
-import { profile } from "../../data/profile";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
-import { hasWebGL } from "../../lib/webgl";
-import { HeroVisualFallback } from "./HeroVisualFallback";
-
-const HeroScene = lazy(() => import("./HeroScene").then((m) => ({ default: m.HeroScene })));
+import { profile, heroTechNodes } from "../../data/profile";
 
 export function Hero() {
-  const reducedMotion = useReducedMotion();
-  const [canRender3D] = useState(() => hasWebGL() && !reducedMotion);
-
-
   return (
     <section id="top" className="relative flex min-h-svh items-center overflow-hidden pt-24">
-      <div className="grid-fade pointer-events-none absolute inset-0" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-void" />
 
-      <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 py-12 sm:px-8 lg:grid-cols-2 lg:px-10">
+      <div className="relative mx-auto max-w-3xl px-6 py-12 sm:px-8 lg:px-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -38,10 +27,10 @@ export function Hero() {
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <a
-              href="#projects"
+              href="#engineering"
               className="rounded-full bg-cyan px-6 py-3 text-sm font-medium text-void transition-transform hover:scale-[1.03]"
             >
-              View Projects
+              Explore the Engineering
             </a>
             <a
               href="#resume"
@@ -63,21 +52,17 @@ export function Hero() {
             </a>
             <span className="font-mono text-xs text-ink-faint">{profile.location}</span>
           </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.9, delay: 0.15, ease: [0.21, 0.47, 0.32, 0.98] }}
-          className="relative h-[380px] sm:h-[440px] lg:h-[520px]"
-        >
-          {canRender3D ? (
-            <Suspense fallback={<HeroVisualFallback />}>
-              <HeroScene />
-            </Suspense>
-          ) : (
-            <HeroVisualFallback />
-          )}
+          <div className="mt-12 flex flex-wrap gap-2">
+            {heroTechNodes.map((node) => (
+              <span
+                key={node}
+                className="rounded-full border border-border-hover bg-surface/50 px-3 py-1.5 font-mono text-xs text-ink-dim backdrop-blur-sm"
+              >
+                {node}
+              </span>
+            ))}
+          </div>
         </motion.div>
       </div>
 
