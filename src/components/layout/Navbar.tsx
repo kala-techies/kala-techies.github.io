@@ -2,13 +2,10 @@ import { useEffect, useState } from "react";
 import { profile } from "../../data/profile";
 
 const LINKS = [
-  { href: "#about", label: "About" },
-  { href: "#engineering", label: "Engineering" },
   { href: "#experience", label: "Experience" },
+  { href: "#capabilities", label: "Capabilities" },
   { href: "#recognition", label: "Recognition" },
   { href: "#independent-projects", label: "Projects" },
-  { href: "#github", label: "GitHub" },
-  { href: "#resume", label: "Resume" },
   { href: "#contact", label: "Contact" },
 ];
 
@@ -30,7 +27,7 @@ export function Navbar() {
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8 lg:px-10">
         <a href="#top" className="font-mono text-sm font-medium tracking-wide text-ink">
-          <span className="text-cyan">~/</span>{profile.name.toLowerCase().replace(/\s+/g, "-")}
+          <span className="text-cyan">~/</span>{profile.fullName.toLowerCase().replace(/\s+/g, "-")}
         </a>
 
         <ul className="hidden items-center gap-8 md:flex">

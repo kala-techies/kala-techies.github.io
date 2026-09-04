@@ -39,7 +39,7 @@ export function Contact() {
               href={channel.href}
               target={channel.href.startsWith("http") ? "_blank" : undefined}
               rel={channel.href.startsWith("http") ? "noreferrer" : undefined}
-              className="group flex h-full flex-col justify-between rounded-xl border border-border bg-surface/50 p-6 transition-all hover:-translate-y-1 hover:border-cyan/60"
+              className="group flex h-full flex-col justify-between rounded-xl border border-border bg-surface/40 p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-cyan/60"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border-hover text-ink-dim group-hover:border-cyan group-hover:text-cyan">
                 <ChannelIcon icon={channel.icon} className="h-4 w-4" />

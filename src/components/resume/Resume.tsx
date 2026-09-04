@@ -7,19 +7,19 @@ export function Resume() {
     <Section
       id="resume"
       eyebrow="Resume"
-      title="Everything on this page, in one file"
-      description="This site is the long-form version of my resume — Experience, Skills, and Projects above mirror it section for section. Grab the original document for applications and ATS systems."
+      title="Grab the original document"
+      description="For applications and ATS systems."
       className="border-t border-border"
     >
       <Reveal>
-        <div className="flex flex-col items-start gap-6 rounded-2xl border border-border bg-surface/50 p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9">
+        <div className="flex flex-col items-start gap-6 rounded-2xl border border-border bg-surface/40 p-7 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:p-9">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-border-hover text-cyan">
               <DocIcon className="h-6 w-6" />
             </div>
             <div>
-              <p className="font-medium text-ink">{profile.name} — {profile.title}</p>
-              <p className="mt-1 text-sm text-ink-faint">Updated · 3 years experience · Bangalore, India</p>
+              <p className="font-medium text-ink">{profile.fullName} — {profile.title}</p>
+              <p className="mt-1 text-sm text-ink-faint">Bangalore, India</p>
             </div>
           </div>
 

@@ -1,7 +1,9 @@
-import { engineeringMap, heroTechNodes, personalProjects } from "../../data/profile";
+import { themes } from "../../data/profile";
 
-export const ZONE_BOUNDARIES = [0, 0.1, 0.44, 0.6, 0.78, 1.0];
-export const ZONE_Z = [6, 2, -14, -24, -34, -42];
+// One scroll-driven journey: hero → experience → the six capability
+// "worlds" → recognition (glass moment) → projects (quieter, secondary) → contact.
+export const ZONE_BOUNDARIES = [0, 0.1, 0.32, 0.66, 0.8, 0.9, 1.0];
+export const ZONE_Z = [8, 3, -6, -30, -40, -47, -52];
 
 export function cameraZAtProgress(progress: number): number {
   for (let i = 0; i < ZONE_BOUNDARIES.length - 1; i++) {
@@ -22,21 +24,15 @@ export function activeZoneAtProgress(progress: number): number {
   return ZONE_BOUNDARIES.length - 2;
 }
 
-export const HERO_CLUSTER = { z: 0, radius: 2.6, labels: heroTechNodes };
+export const HERO_Z = 8;
+export const EXPERIENCE_Z = -6;
 
-export const ENGINEERING_CLUSTER = {
-  z: -14,
-  tierSizes: engineeringMap.map((t) => t.nodes.length),
-  labels: engineeringMap.flatMap((t) => t.nodes),
-  tierNames: engineeringMap.map((t) => t.label),
-};
+// The six theme forms are spaced along the "capabilities" stretch of the
+// journey (zone index 2, progress 0.32–0.66).
+export const THEME_Z_START = -10;
+export const THEME_Z_SPACING = 5.5;
+export const THEME_Z = themes.map((_, i) => THEME_Z_START - i * THEME_Z_SPACING);
 
-export const RECOGNITION_CLUSTER = { z: -24 };
-
-export const PERSONAL_CLUSTER = {
-  z: -34,
-  radius: 1.4,
-  labels: personalProjects.map((p) => p.name),
-};
-
-export const END_CLUSTER = { z: -42 };
+export const RECOGNITION_Z = -40;
+export const PROJECTS_Z = -47;
+export const END_Z = -54;

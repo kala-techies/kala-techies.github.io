@@ -9,22 +9,14 @@ import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
  * all of it into the main bundle regardless of whether Scene itself is
  * lazy.
  */
-export function CanvasScene({
-  progressRef,
-  activeZone,
-  onZoneChange,
-}: {
-  progressRef: ScrollProgressRef;
-  activeZone: number;
-  onZoneChange: (zone: number) => void;
-}) {
+export function CanvasScene({ progressRef }: { progressRef: ScrollProgressRef }) {
   return (
     <Canvas
       dpr={[1, 1.5]}
-      camera={{ position: [0, 0, 6], fov: 50 }}
+      camera={{ position: [0, 0.6, 8], fov: 50 }}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
     >
-      <Scene progressRef={progressRef} activeZone={activeZone} onZoneChange={onZoneChange} />
+      <Scene progressRef={progressRef} />
     </Canvas>
   );
 }
