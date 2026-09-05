@@ -65,6 +65,16 @@ export function localProgress(progress: number, zoneId: ZoneId): number {
   return Math.min(1, Math.max(0, (progress - a) / (b - a)));
 }
 
+/** Whether progress falls within a given zone (plus a small buffer on
+ * either side) — used by scenes that track the camera's z each frame so
+ * that tracking only kicks in near their own zone, instead of following
+ * the camera for the entire journey and colliding with every other
+ * tracked scene. */
+export function withinZone(progress: number, zoneId: ZoneId, buffer = 0.02): boolean {
+  const idx = ZONE_IDS.indexOf(zoneId);
+  return progress >= ZONE_BOUNDARIES[idx] - buffer && progress <= ZONE_BOUNDARIES[idx + 1] + buffer;
+}
+
 /** How "inside" the reveal zone we are, 0→1→0, used to blend the camera
  * into an elevated pull-back view and back out smoothly rather than
  * snapping. */
@@ -91,8 +101,7 @@ export const Z = {
   automation: ZONE_Z[6],
   servicebus: ZONE_Z[7],
   production: ZONE_Z[8],
-  drPrimary: ZONE_Z[9] + 4,
-  drSecondary: ZONE_Z[9] - 5,
+  dr: ZONE_Z[9],
   impact: ZONE_Z[11],
   recommendations: ZONE_Z[12],
   work: ZONE_Z[13],

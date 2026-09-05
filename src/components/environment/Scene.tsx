@@ -3,7 +3,15 @@ import { useFrame } from "@react-three/fiber";
 import { Grid } from "@react-three/drei";
 import * as THREE from "three";
 import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
-import { Z, cameraZAtProgress, localProgress, revealBlend } from "./zones";
+import { Z, cameraZAtProgress, localProgress, revealBlend, withinZone } from "./zones";
+
+// How far ahead of the camera a single-hero "climax" scene (one that
+// transforms based on local scroll progress, rather than being staggered
+// across several meters like Pipeline/Kubernetes/Network) keeps itself.
+// These scenes track the camera's own z each frame instead of sitting at
+// a fixed world z, so they can't be outrun mid-zone the way a static
+// placement could.
+const HERO_LEAD = 9;
 
 const CYAN = "#4fd1ff";
 const AZURE = "#3b82f6";
@@ -512,6 +520,7 @@ function ServiceBusScene({ reducedMotion }: { reducedMotion: boolean }) {
 /* ------------------------- SCENE 09: PRODUCTION ---------------------------- */
 
 function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
+  const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const alertRingRef = useRef<THREE.Mesh>(null);
@@ -520,6 +529,16 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
 
   useFrame((state, delta) => {
     if (ringRef.current) ringRef.current.rotation.z += delta * 0.3;
+
+    // Track a fixed distance ahead of the camera's own position through
+    // this zone, rather than sitting at a fixed world z — a static
+    // placement gets outrun by the camera partway through the zone and
+    // the incident becomes invisible right as it should be climaxing.
+    // Only while near this zone, so it doesn't chase the camera for the
+    // entire journey and collide with the other tracked hero scenes.
+    if (groupRef.current && withinZone(progressRef.current, "production")) {
+      groupRef.current.position.z = cameraZAtProgress(progressRef.current) - HERO_LEAD;
+    }
 
     // The incident lifecycle: calm → alert → investigated → remediated →
     // calm again, driven entirely by how far through this zone the
@@ -543,7 +562,7 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
   });
 
   return (
-    <group position={[1.9, 0.2, Z.production]}>
+    <group ref={groupRef} position={[1.4, 0.2, Z.production]}>
       <mesh ref={coreRef}>
         <icosahedronGeometry args={[1.3, 2]} />
         <meshStandardMaterial ref={materialRef} color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
@@ -563,12 +582,23 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
 
 /* ------------------------------- SCENE 10: DR ------------------------------ */
 
+const DR_PRIMARY_LEAD = 4;
+const DR_SECONDARY_LEAD = -5;
+
 function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef }) {
+  const groupRef = useRef<THREE.Group>(null);
   const beamRef = useRef<THREE.Mesh>(null);
   const primaryMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const secondaryMatRef = useRef<THREE.MeshStandardMaterial>(null);
 
   useFrame((state) => {
+    // Same fixed-lead, own-zone-only tracking as Production — without it,
+    // the camera outruns the primary/secondary pair before the failover
+    // they're meant to illustrate ever plays out on screen.
+    if (groupRef.current && withinZone(progressRef.current, "dr")) {
+      groupRef.current.position.z = cameraZAtProgress(progressRef.current) - HERO_LEAD;
+    }
+
     const t = localProgress(progressRef.current, "dr");
     // 0–0.4 primary active; 0.4–0.6 failover event; 0.6–1 secondary active.
     const primaryHealth = t < 0.4 ? 1 : Math.max(0, 1 - (t - 0.4) / 0.2);
@@ -583,22 +613,24 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
     }
   });
 
+  const beamMid = (DR_PRIMARY_LEAD + DR_SECONDARY_LEAD) / 2;
+
   return (
-    <>
-      <mesh position={[-1, 0.3, Z.drPrimary]}>
+    <group ref={groupRef} position={[0, 0, Z.dr]}>
+      <mesh position={[-1, 0.3, DR_PRIMARY_LEAD]}>
         <icosahedronGeometry args={[1.1, 1]} />
         <meshStandardMaterial ref={primaryMatRef} color={CYAN} emissive={CYAN} emissiveIntensity={0.7} wireframe />
       </mesh>
-      <mesh position={[1, -0.2, Z.drSecondary]}>
+      <mesh position={[1, -0.2, DR_SECONDARY_LEAD]}>
         <icosahedronGeometry args={[0.8, 1]} />
         <meshStandardMaterial ref={secondaryMatRef} color={VIOLET} emissive={VIOLET} emissiveIntensity={0.6} wireframe />
       </mesh>
-      <mesh ref={beamRef} position={[0, 0.05, (Z.drPrimary + Z.drSecondary) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, Z.drPrimary - Z.drSecondary, 8]} />
+      <mesh ref={beamRef} position={[0, 0.05, beamMid]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.025, 0.025, DR_PRIMARY_LEAD - DR_SECONDARY_LEAD, 8]} />
         <meshBasicMaterial color={CYAN} transparent opacity={0.3} />
       </mesh>
-      <FlowPath points={[[-1, 0.3, Z.drPrimary], [0, 0.05, (Z.drPrimary + Z.drSecondary) / 2], [1, -0.2, Z.drSecondary]]} count={4} speed={0.15} color={CYAN} size={0.05} />
-    </>
+      <FlowPath points={[[-1, 0.3, DR_PRIMARY_LEAD], [0, 0.05, beamMid], [1, -0.2, DR_SECONDARY_LEAD]]} count={4} speed={0.15} color={CYAN} size={0.05} />
+    </group>
   );
 }
 
