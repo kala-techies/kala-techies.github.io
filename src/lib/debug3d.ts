@@ -22,6 +22,7 @@ export type BeatId =
   | "aksNodePool"
   | "networkNsgSplit"
   | "serviceBusToAutomation"
+  | "automationReport"
   | "monitoringSignal"
   | "productionIncident"
   | "drFailover";
@@ -46,6 +47,7 @@ export const BEAT_META: Record<BeatId, BeatMeta> = {
   aksNodePool: { label: "AKS 3rd node-pool scale-in", zone: "aks", triggerProgress: 0.1, peakProgress: 0.4 },
   networkNsgSplit: { label: "Network NSG accept/reject split", zone: "network", triggerProgress: 0, peakProgress: 0.3 },
   serviceBusToAutomation: { label: "Service Bus -> Automation handoff", zone: "automation", triggerProgress: 0, peakProgress: 0.04 },
+  automationReport: { label: "Automation report card (act 3)", zone: "automation", triggerProgress: 0.75, peakProgress: 0.9 },
   monitoringSignal: { label: "Monitoring alert signal", zone: "monitoring", triggerProgress: 0.35, peakProgress: 0.85 },
   productionIncident: { label: "Production incident peak", zone: "production", triggerProgress: 0.25, peakProgress: 0.5 },
   drFailover: { label: "DR failover event", zone: "dr", triggerProgress: 0.35, peakProgress: 0.5 },
@@ -57,6 +59,7 @@ export const BEAT_ORDER: BeatId[] = [
   "aksNodePool",
   "networkNsgSplit",
   "serviceBusToAutomation",
+  "automationReport",
   "monitoringSignal",
   "productionIncident",
   "drFailover",

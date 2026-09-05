@@ -832,6 +832,10 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
     if (reportRef.current) {
       reportRef.current.scale.setScalar(Math.max(0.001, reportT));
+      if (DEBUG_3D) {
+        reportRef.current.updateMatrixWorld(true);
+        recordBeat("automationReport", reportRef.current.getWorldPosition(automationDebugScratch), t);
+      }
     }
   });
 
