@@ -23,12 +23,17 @@ const JOURNEY_VH = 900;
  * of sections you scroll past, it's a subtitle track for the 3D journey.
  * A tall, otherwise-empty spacer supplies the scrollable distance.
  *
- * Falls back to a normal linear, accessible page for
- * `prefers-reduced-motion` or no-WebGL — same content, no camera.
+ * Falls back to a normal linear, accessible page only when WebGL is
+ * genuinely unavailable. `prefers-reduced-motion` does NOT trigger the
+ * fallback — the camera only moves in direct response to scroll input,
+ * which isn't the ambient/autoplaying motion that setting exists to
+ * suppress. Instead it's threaded into the scene to freeze idle
+ * animation (rotation, pulsing, flowing particles) while scroll-driven
+ * camera movement keeps working.
  */
 export function ScrollEnvironment() {
   const reducedMotion = useReducedMotion();
-  const [canRender3D] = useState(() => hasWebGL() && !reducedMotion);
+  const [canRender3D] = useState(() => hasWebGL());
   const progressRef = useScrollProgress();
   const zone = useActiveZone(progressRef);
 
@@ -44,7 +49,7 @@ export function ScrollEnvironment() {
     <>
       <div className="fixed inset-0 -z-10">
         <Suspense fallback={<EnvironmentFallback />}>
-          <CanvasScene progressRef={progressRef} />
+          <CanvasScene progressRef={progressRef} reducedMotion={reducedMotion} />
         </Suspense>
       </div>
       <GlassFloor />
