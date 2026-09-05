@@ -431,19 +431,19 @@ function DisasterRecoveryScene({ reducedMotion }: { reducedMotion: boolean }) {
   useFrame((state) => {
     if (beamRef.current) {
       const m = beamRef.current.material as THREE.MeshBasicMaterial;
-      m.opacity = reducedMotion ? 0.2 : 0.15 + (Math.sin(state.clock.elapsedTime * 1.5) + 1) * 0.15;
+      m.opacity = reducedMotion ? 0.3 : 0.25 + (Math.sin(state.clock.elapsedTime * 1.5) + 1) * 0.2;
     }
   });
 
   return (
     <>
-      <mesh position={[0, 0, Z.drPrimary]}>
-        <icosahedronGeometry args={[1, 1]} />
-        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.35} wireframe />
+      <mesh position={[-1, 0.3, Z.drPrimary]}>
+        <icosahedronGeometry args={[1.1, 1]} />
+        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.7} wireframe />
       </mesh>
-      <mesh position={[0, 0, Z.drSecondary]}>
-        <icosahedronGeometry args={[0.7, 1]} />
-        <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.3} wireframe />
+      <mesh position={[1, -0.2, Z.drSecondary]}>
+        <icosahedronGeometry args={[0.8, 1]} />
+        <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.6} wireframe />
       </mesh>
       <mesh
         ref={beamRef}
