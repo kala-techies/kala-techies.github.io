@@ -21,6 +21,11 @@ export type BeatId =
   | "kubernetesFourthNode"
   | "aksNodePool"
   | "networkNsgSplit"
+  | "networkLoadBalancer"
+  | "networkPrivateEndpoint"
+  | "securityKeyVault"
+  | "serviceBusFanout"
+  | "serviceBusDeadLetter"
   | "serviceBusToAutomation"
   | "automationReport"
   | "monitoringSignal"
@@ -46,6 +51,11 @@ export const BEAT_META: Record<BeatId, BeatMeta> = {
   kubernetesFourthNode: { label: "Kubernetes 4th node scale-in", zone: "kubernetes", triggerProgress: 0.05, peakProgress: 0.3 },
   aksNodePool: { label: "AKS 3rd node-pool scale-in", zone: "aks", triggerProgress: 0.1, peakProgress: 0.4 },
   networkNsgSplit: { label: "Network NSG accept/reject split", zone: "network", triggerProgress: 0, peakProgress: 0.3 },
+  networkLoadBalancer: { label: "Network load balancer split", zone: "network", triggerProgress: 0, peakProgress: 0.15 },
+  networkPrivateEndpoint: { label: "Network private endpoint tunnel", zone: "network", triggerProgress: 0.4, peakProgress: 0.55 },
+  securityKeyVault: { label: "Security Key Vault secret retrieval", zone: "security", triggerProgress: 0.3, peakProgress: 0.5 },
+  serviceBusFanout: { label: "Service Bus topic fan-out", zone: "servicebus", triggerProgress: 0.15, peakProgress: 0.3 },
+  serviceBusDeadLetter: { label: "Service Bus dead-letter accumulation", zone: "servicebus", triggerProgress: 0.5, peakProgress: 0.85 },
   serviceBusToAutomation: { label: "Service Bus -> Automation handoff", zone: "automation", triggerProgress: 0, peakProgress: 0.04 },
   automationReport: { label: "Automation report card (act 3)", zone: "automation", triggerProgress: 0.75, peakProgress: 0.9 },
   monitoringSignal: { label: "Monitoring alert signal", zone: "monitoring", triggerProgress: 0.35, peakProgress: 0.85 },
@@ -58,6 +68,11 @@ export const BEAT_ORDER: BeatId[] = [
   "kubernetesFourthNode",
   "aksNodePool",
   "networkNsgSplit",
+  "networkLoadBalancer",
+  "networkPrivateEndpoint",
+  "securityKeyVault",
+  "serviceBusFanout",
+  "serviceBusDeadLetter",
   "serviceBusToAutomation",
   "automationReport",
   "monitoringSignal",

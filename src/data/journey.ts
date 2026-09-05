@@ -61,18 +61,36 @@ export const sceneCaptions: SceneCaption[] = [
     eyebrow: "Scene 05",
     heading: "Network",
     line: "Infrastructure isn't useful if everything can talk to everything. Traffic needs rules.",
+    beats: [
+      { at: 0, heading: "Network", line: "Now we need to control how everything talks." },
+      { at: 0.08, heading: "Network", line: "Inside the network, workloads still need boundaries." },
+      { at: 0.15, heading: "Load Balancer", line: "Traffic doesn't need to know which instance is waiting for it." },
+      { at: 0.3, heading: "NSG", line: "But not everything should be allowed through." },
+      { at: 0.55, heading: "Private Endpoint", line: "Some services need a private path." },
+    ],
   },
   {
     id: "security",
     eyebrow: "Scene 06",
     heading: "Security",
     line: "Applications need secrets. They shouldn't need to know where those secrets live.",
+    beats: [
+      { at: 0, heading: "Security", line: "Applications need secrets." },
+      { at: 0.25, heading: "Key Vault", line: "They shouldn't need to know where those secrets live." },
+    ],
   },
   {
     id: "servicebus",
     eyebrow: "Scene 07",
     heading: "Messaging",
     line: "Not everything happens synchronously. Some messages don't make it through cleanly.",
+    beats: [
+      { at: 0, heading: "Messaging", line: "Not every system should wait for the other side." },
+      { at: 0.12, heading: "Messaging", line: "Sometimes we just send a message." },
+      { at: 0.22, heading: "Topic", line: "One event can reach many consumers." },
+      { at: 0.5, heading: "Dead Letters", line: "And sometimes messages fail." },
+      { at: 0.75, heading: "Dead Letters", line: "That's when the dead letters start piling up." },
+    ],
   },
   {
     id: "automation",

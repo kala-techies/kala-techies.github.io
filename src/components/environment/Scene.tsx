@@ -925,8 +925,10 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
 }
 
 /* ---------------------------- SCENE 05: NETWORK --------------------------- */
-// Traffic reaches the NSG gate and splits: most continues through the
-// private endpoint, some is visibly diverted and never arrives.
+// The traffic leaving AKS becomes the road into a VNet: a territory
+// containing two subnets, split at a load balancer, filtered at the
+// (already verified) NSG gate, then routed onward or down a private
+// tunnel to a protected service. One continuous path, not a diagram.
 
 // Measured with ?debug3d=1: at this scene's old anchor (the zone's own
 // start Z, matching every element's local z=0), the camera reached that
@@ -935,46 +937,121 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
 // BEHIND, 153deg off-axis at local progress 0.5). Pushing the whole
 // group 5 units deeper moves the real pass-point out to local progress
 // 0.5, so the traffic split is in front of the camera for the front
-// half of the zone instead of almost none of it.
+// half of the zone instead of almost none of it. The new load-balancer
+// and private-endpoint beats share this same anchor and were tuned
+// against it the same way.
 const NETWORK_Z_OFFSET = -5;
+const NETWORK_LB_X = -0.9;
+const NETWORK_LB_BRANCH_X = -0.2;
+const NETWORK_LB_RECONVERGE_X = 1.05;
+const NETWORK_LB_BRANCH_Y = [0.4, 0, -0.4];
+const NETWORK_TUNNEL_START_X = 3.1;
+const NETWORK_TUNNEL_END_X = 5.4;
+const NETWORK_SERVICE_X = 6.3;
 
 function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
+  const lbRef = useRef<THREE.Mesh>(null);
+  const tunnelMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const nsgScratch = useMemo(() => new THREE.Vector3(), []);
+  const lbScratch = useMemo(() => new THREE.Vector3(), []);
+  const peScratch = useMemo(() => new THREE.Vector3(), []);
 
-  useFrame(() => {
+  const tunnelGeometry = useMemo(() => {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(NETWORK_TUNNEL_START_X, 0, 0),
+      new THREE.Vector3((NETWORK_TUNNEL_START_X + NETWORK_TUNNEL_END_X) / 2, 0, 0.15),
+      new THREE.Vector3(NETWORK_TUNNEL_END_X, 0, 0),
+    ]);
+    return new THREE.TubeGeometry(curve, 24, 0.42, 12, false);
+  }, []);
+
+  useFrame((state, delta) => {
+    if (lbRef.current && !reducedMotion) lbRef.current.rotation.y += delta * 0.5;
+    if (tunnelMatRef.current && !reducedMotion) {
+      // a slow, enclosed pulse — private, not exposed to the open road
+      tunnelMatRef.current.emissiveIntensity = 0.3 + Math.sin(state.clock.elapsedTime * 1.6) * 0.08;
+    }
+
     if (DEBUG_3D && groupRef.current) {
       groupRef.current.updateMatrixWorld(true);
+      const t = localProgress(progressRef.current, "network");
+
       nsgScratch.set(1.7, 0, 0);
       groupRef.current.localToWorld(nsgScratch);
-      recordBeat("networkNsgSplit", nsgScratch, localProgress(progressRef.current, "network"));
+      recordBeat("networkNsgSplit", nsgScratch, t);
+
+      lbScratch.set(NETWORK_LB_X, 0, 0);
+      groupRef.current.localToWorld(lbScratch);
+      recordBeat("networkLoadBalancer", lbScratch, t);
+
+      peScratch.set((NETWORK_TUNNEL_START_X + NETWORK_TUNNEL_END_X) / 2, 0, 0);
+      groupRef.current.localToWorld(peScratch);
+      recordBeat("networkPrivateEndpoint", peScratch, t);
     }
   });
 
   return (
     <group ref={groupRef} position={[0, 0, Z.network + NETWORK_Z_OFFSET]}>
-      <mesh>
-        <boxGeometry args={[5, 2, 3.6]} />
-        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.4} />
+      {/* VNet — a territory, not a logo. Large enough to visibly contain
+          everything else in this zone, styled like the Azure envelope
+          from Stages 1-2 so it reads as the same world. */}
+      <mesh position={[1.5, 0, 0]}>
+        <boxGeometry args={[11.4, 3, 5]} />
+        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.2} />
       </mesh>
+
+      {/* subnet A — application side, holds the incoming traffic and the load balancer */}
       <mesh position={[-1, 0, 0]}>
-        <boxGeometry args={[2.4, 1.2, 2.2]} />
-        <meshStandardMaterial color={CYAN} wireframe transparent opacity={0.55} />
+        <boxGeometry args={[4.4, 1.7, 2.6]} />
+        <meshStandardMaterial color={CYAN} wireframe transparent opacity={0.32} />
       </mesh>
+      {/* subnet B — private services side, past the gate */}
+      <mesh position={[4.9, 0, 0]}>
+        <boxGeometry args={[3.8, 1.7, 2.6]} />
+        <meshStandardMaterial color={VIOLET} wireframe transparent opacity={0.32} />
+      </mesh>
+
+      {/* load balancer — incoming traffic converges, is distributed
+          across a few workloads, then recombines into one path forward */}
+      <mesh ref={lbRef} position={[NETWORK_LB_X, 0, 0]}>
+        <octahedronGeometry args={[0.32, 0]} />
+        <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.6} roughness={0.4} metalness={0.4} />
+      </mesh>
+      {NETWORK_LB_BRANCH_Y.map((y) => (
+        <mesh key={y} position={[NETWORK_LB_BRANCH_X, y, 0]}>
+          <boxGeometry args={[0.28, 0.28, 0.28]} />
+          <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
+        </mesh>
+      ))}
+
+      {/* NSG gate — untouched: same position, same recordBeat call this
+          beat was verified against */}
       <mesh position={[1.7, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
         <torusGeometry args={[0.6, 0.06, 12, 32]} />
         <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.6} />
       </mesh>
-      <mesh position={[3.1, 0, 0]}>
-        <cylinderGeometry args={[0.35, 0.35, 0.5, 16]} />
-        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.4} transparent opacity={0.6} />
+
+      {/* private endpoint — an enclosed tunnel, physically distinct from
+          the open road, leading to a protected service */}
+      <mesh geometry={tunnelGeometry}>
+        <meshStandardMaterial ref={tunnelMatRef} color={VIOLET} emissive={VIOLET} emissiveIntensity={0.3} transparent opacity={0.22} side={THREE.DoubleSide} roughness={0.6} />
       </mesh>
-      <mesh position={[4.4, 0, 0]}>
+      <mesh position={[NETWORK_SERVICE_X, 0, 0]}>
         <boxGeometry args={[0.6, 0.6, 0.6]} />
         <meshStandardMaterial color="#eaf6ff" emissive="#eaf6ff" emissiveIntensity={0.4} roughness={0.3} metalness={0.5} />
       </mesh>
-      {/* accepted traffic — passes the gate, reaches the endpoint */}
-      <FlowPath points={[[-2, 0, 0], [-0.4, 0, 0], [1.7, 0, 0], [3.1, 0, 0], [4.4, 0, 0]]} count={6} speed={0.15} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+
+      {/* traffic — several packets, not one line: converge, split at the
+          load balancer, recombine, pass (or don't) the gate, then thread
+          the private tunnel to the protected service */}
+      <FlowPath points={[[-3, 0, 0], [NETWORK_LB_X, 0, 0]]} count={5} speed={0.15} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+      {NETWORK_LB_BRANCH_Y.map((y, i) => (
+        <FlowPath key={y} points={[[NETWORK_LB_X, 0, 0], [NETWORK_LB_BRANCH_X, y, 0], [NETWORK_LB_RECONVERGE_X, y * 0.25, 0]]} count={2} speed={0.18} offset={i * 0.3} color={CYAN} size={0.045} reducedMotion={reducedMotion} />
+      ))}
+      <FlowPath points={[[NETWORK_LB_RECONVERGE_X, 0, 0], [1.7, 0, 0]]} count={4} speed={0.15} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+      {/* accepted traffic — through the gate, into the private tunnel */}
+      <FlowPath points={[[1.7, 0, 0], [NETWORK_TUNNEL_START_X, 0, 0], [(NETWORK_TUNNEL_START_X + NETWORK_TUNNEL_END_X) / 2, 0, 0.15], [NETWORK_TUNNEL_END_X, 0, 0], [NETWORK_SERVICE_X, 0, 0]]} count={7} speed={0.14} color={VIOLET} size={0.05} reducedMotion={reducedMotion} />
       {/* rejected traffic — meets the gate and never arrives */}
       <FlowPath points={[[1.5, 0.15, 0], [2, -0.55, 0.35], [2.3, -1.05, 0.55]]} count={3} speed={0.22} color={RED} size={0.045} reducedMotion={reducedMotion} />
     </group>
@@ -982,26 +1059,62 @@ function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgr
 }
 
 /* --------------------------- SCENE 06: SECURITY ---------------------------- */
+// The same network paths lead here — Key Vault isn't a disconnected
+// island. An application requests a secret, the request crosses a gate,
+// the vault responds, and a single abstract token rides back out. The
+// ambient orbiting spheres are the many secrets already stored; the one
+// token that departs mid-zone is what this specific request receives.
 
-function SecurityScene({ reducedMotion }: { reducedMotion: boolean }) {
+// Same "static anchor already behind the camera at zone start" pattern
+// as Network/Automation — pushed deeper so the request/response cycle
+// plays out in front of the camera. Tuned with ?debug3d=1.
+const SECURITY_Z_OFFSET = -5;
+
+function SecurityScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const secretsRef = useRef<THREE.InstancedMesh>(null);
+  const vaultMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const gateMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const tokenRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const secretCount = 6;
+  const debugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state) => {
-    if (!secretsRef.current) return;
-    const t = state.clock.elapsedTime;
-    for (let i = 0; i < secretCount; i++) {
-      const angle = t * 0.3 + (i / secretCount) * Math.PI * 2;
-      dummy.position.set(Math.cos(angle) * 0.9, 0.2 + Math.sin(t + i) * 0.1, Math.sin(angle) * 0.9);
-      dummy.updateMatrix();
-      secretsRef.current.setMatrixAt(i, dummy.matrix);
+    if (secretsRef.current) {
+      const t0 = state.clock.elapsedTime;
+      for (let i = 0; i < secretCount; i++) {
+        const angle = t0 * 0.3 + (i / secretCount) * Math.PI * 2;
+        dummy.position.set(Math.cos(angle) * 0.9, 0.2 + Math.sin(t0 + i) * 0.1, Math.sin(angle) * 0.9);
+        dummy.updateMatrix();
+        secretsRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      secretsRef.current.instanceMatrix.needsUpdate = true;
     }
-    secretsRef.current.instanceMatrix.needsUpdate = true;
+
+    // SETUP (request crosses the gate) -> EVENT (vault responds) ->
+    // RESULT (a single token rides back out) — timed to this zone's own
+    // local progress, one full cycle, not ambient.
+    const t = localProgress(progressRef.current, "security");
+    const gateFlash = Math.max(0, 1 - Math.abs(t - 0.2) / 0.12);
+    const vaultFlash = Math.max(0, 1 - Math.abs(t - 0.45) / 0.15);
+    if (gateMatRef.current) gateMatRef.current.emissiveIntensity = 0.5 + gateFlash * 0.9;
+    if (vaultMatRef.current) vaultMatRef.current.emissiveIntensity = 0.35 + vaultFlash * 0.8;
+
+    const returnT = Math.max(0, Math.min(1, (t - 0.45) / 0.35));
+    if (tokenRef.current) {
+      tokenRef.current.position.x = THREE.MathUtils.lerp(0, -3.2, smoothstep(returnT));
+      const appear = Math.min(1, returnT * 4) * (1 - smoothstep((returnT - 0.85) / 0.15));
+      tokenRef.current.scale.setScalar(Math.max(0.001, appear));
+      tokenRef.current.updateMatrixWorld(true);
+    }
+
+    if (DEBUG_3D && tokenRef.current) {
+      recordBeat("securityKeyVault", tokenRef.current.getWorldPosition(debugScratch), t);
+    }
   });
 
   return (
-    <group position={[0, 0, Z.security]}>
+    <group position={[0, 0, Z.security + SECURITY_Z_OFFSET]}>
       {/* the requesting application */}
       <mesh position={[-3.2, 0, 0]}>
         <boxGeometry args={[0.5, 0.5, 0.5]} />
@@ -1010,71 +1123,147 @@ function SecurityScene({ reducedMotion }: { reducedMotion: boolean }) {
       {/* an identity/access gate the request must pass */}
       <mesh position={[-1.6, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
         <torusGeometry args={[0.5, 0.05, 12, 32]} />
-        <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.5} />
+        <meshStandardMaterial ref={gateMatRef} color={AMBER} emissive={AMBER} emissiveIntensity={0.5} />
       </mesh>
       {/* the vault — the only thing secrets orbit */}
       <mesh position={[0, 0, 0]}>
         <cylinderGeometry args={[0.55, 0.6, 1.1, 20]} />
-        <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.35} roughness={0.4} metalness={0.4} />
+        <meshStandardMaterial ref={vaultMatRef} color={VIOLET} emissive={VIOLET} emissiveIntensity={0.35} roughness={0.4} metalness={0.4} />
       </mesh>
       <instancedMesh ref={secretsRef} args={[undefined, undefined, secretCount]}>
         <sphereGeometry args={[0.06, 8, 8]} />
         <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={1} />
       </instancedMesh>
+      {/* the one token this request actually receives — abstract, the
+          secret's real value is never shown */}
+      <mesh ref={tokenRef} position={[0, 0.35, 0]} scale={0}>
+        <icosahedronGeometry args={[0.1, 0]} />
+        <meshStandardMaterial color="#eaf6ff" emissive={VIOLET} emissiveIntensity={1.1} />
+      </mesh>
       {/* the request, only granted past the gate */}
       <FlowPath points={[[-3.2, 0, 0], [-1.6, 0, 0], [0, 0, 0]]} count={3} speed={0.1} color={AMBER} size={0.05} reducedMotion={reducedMotion} />
-      {/* the secret, carried back out */}
-      <FlowPath points={[[0, 0.15, 0], [-1.6, 0.15, 0], [-3.2, 0.15, 0]]} count={2} speed={0.08} offset={0.5} color={VIOLET} size={0.045} reducedMotion={reducedMotion} />
     </group>
   );
 }
 
 /* --------------------------- SCENE 07: SERVICE BUS -------------------------- */
+// The environment changes: instead of network paths, messages. A queue
+// shows producer/consumer decoupling, a topic fans one message out to
+// three subscriptions, and a dead-letter area visibly accumulates as
+// some messages fail — the problem Automation, next, exists to solve.
+// Left unsolved here on purpose.
 
-function ServiceBusScene({ reducedMotion }: { reducedMotion: boolean }) {
+// Same anchor pattern as Network/Security — pushed deeper so the
+// fan-out and dead-letter beats play out in front of the camera. Tuned
+// with ?debug3d=1.
+const SERVICEBUS_Z_OFFSET = -5;
+const SERVICEBUS_SUB_Y = [0.7, 0, -0.7];
+const SERVICEBUS_DLQ_COUNT = 6;
+
+function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const topicMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const dlqRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const topicScratch = useMemo(() => new THREE.Vector3(), []);
+  const dlqScratch = useMemo(() => new THREE.Vector3(), []);
+  const dlqSeeds = useMemo(
+    () =>
+      Array.from({ length: SERVICEBUS_DLQ_COUNT }, (_, i) => {
+        const seed = i * 7.233;
+        const rand = (n: number) => Math.abs(Math.sin(seed + n) * 12543.233) % 1;
+        return new THREE.Vector3(1.2 + rand(1) * 0.9, -1.7 + rand(2) * 0.7, -0.7 + rand(3) * 0.7);
+      }),
+    []
+  );
+
+  useFrame(() => {
+    const t = localProgress(progressRef.current, "servicebus");
+
+    // one message arrives at the topic and fans out — a brief brightness
+    // pulse, not a constant shimmer
+    const fanoutPulse = Math.max(0, 1 - Math.abs(t - 0.22) / 0.1);
+    if (topicMatRef.current) topicMatRef.current.emissiveIntensity = 0.35 + fanoutPulse * 0.9;
+
+    // dead letters accumulate one at a time through the back half of the
+    // zone — not solved here, just left visible
+    if (dlqRef.current) {
+      for (let i = 0; i < SERVICEBUS_DLQ_COUNT; i++) {
+        const arriveAt = 0.5 + (i / SERVICEBUS_DLQ_COUNT) * 0.4;
+        const grown = smoothstep((t - arriveAt) / 0.06);
+        dummy.position.copy(dlqSeeds[i]);
+        dummy.scale.setScalar(Math.max(0.001, grown));
+        dummy.updateMatrix();
+        dlqRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      dlqRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    if (DEBUG_3D) {
+      topicScratch.set(-0.4, 0, Z.servicebus + SERVICEBUS_Z_OFFSET);
+      recordBeat("serviceBusFanout", topicScratch, t);
+      dlqScratch.set(1.6, -1.4, Z.servicebus + SERVICEBUS_Z_OFFSET);
+      recordBeat("serviceBusDeadLetter", dlqScratch, t);
+    }
+  });
+
   return (
-    <group position={[0, 0, Z.servicebus]}>
+    <group position={[0, 0, Z.servicebus + SERVICEBUS_Z_OFFSET]}>
       {/* application */}
       <mesh position={[-3.4, 0.2, 0]}>
         <boxGeometry args={[0.5, 0.5, 0.5]} />
         <meshStandardMaterial color="#eaf6ff" emissive="#eaf6ff" emissiveIntensity={0.3} />
       </mesh>
+
+      {/* queue — the producer doesn't wait for a consumer; the queue sits between them */}
+      <mesh position={[-2.1, -1, 0]}>
+        <boxGeometry args={[0.9, 0.4, 0.4]} />
+        <meshStandardMaterial color={CYAN} wireframe transparent opacity={0.6} />
+      </mesh>
+      <mesh position={[-0.6, -1, 0]}>
+        <boxGeometry args={[0.35, 0.35, 0.35]} />
+        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.4} />
+      </mesh>
+      <FlowPath points={[[-3.4, 0.2, 0], [-2.1, -1, 0]]} count={3} speed={0.12} color={CYAN} size={0.045} reducedMotion={reducedMotion} />
+      <FlowPath points={[[-2.1, -1, 0], [-0.6, -1, 0]]} count={2} speed={0.18} offset={0.5} color={CYAN} size={0.045} reducedMotion={reducedMotion} />
+
       {/* namespace boundary */}
       <mesh position={[-0.4, 0, 0]}>
-        <boxGeometry args={[3.4, 1.4, 1.4]} />
-        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.4} />
+        <boxGeometry args={[3.6, 1.8, 1.8]} />
+        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.35} />
       </mesh>
-      {/* topic */}
+      {/* topic — one message fans out to several subscriptions */}
       <mesh position={[-0.4, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.28, 0.28, 2.6, 20]} />
-        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.35} transparent opacity={0.7} />
+        <meshStandardMaterial ref={topicMatRef} color={CYAN} emissive={CYAN} emissiveIntensity={0.35} transparent opacity={0.7} />
       </mesh>
       {/* subscriptions branching off */}
-      {[0.6, -0.6].map((y, i) => (
-        <mesh key={i} position={[1.4, y, 0]}>
-          <sphereGeometry args={[0.22, 16, 16]} />
+      {SERVICEBUS_SUB_Y.map((y) => (
+        <mesh key={y} position={[1.4, y, 0]}>
+          <sphereGeometry args={[0.2, 16, 16]} />
           <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.5} />
         </mesh>
       ))}
       {/* consumers */}
-      {[0.6, -0.6].map((y, i) => (
-        <mesh key={i} position={[2.8, y, 0]}>
-          <boxGeometry args={[0.4, 0.4, 0.4]} />
+      {SERVICEBUS_SUB_Y.map((y) => (
+        <mesh key={y} position={[2.7, y, 0]}>
+          <boxGeometry args={[0.36, 0.36, 0.36]} />
           <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.4} />
         </mesh>
       ))}
-      {/* dead-letter area — a separate, amber-tinted holding zone that
-          Automation, next, will be shown clearing out */}
-      <mesh position={[1.4, -2, -0.5]}>
-        <boxGeometry args={[0.9, 0.6, 0.6]} />
-        <meshStandardMaterial color={RED} emissive={RED} emissiveIntensity={0.3} wireframe />
-      </mesh>
 
-      {/* main flow: app → topic → subscriptions → consumers */}
-      <FlowPath points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, 0.6, 0], [2.8, 0.6, 0]]} count={5} speed={0.14} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
-      <FlowPath points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, -0.6, 0], [2.8, -0.6, 0]]} count={5} speed={0.12} offset={0.4} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+      {/* dead-letter area — accumulates through the zone instead of
+          sitting there as one static box; Automation, next, clears it out */}
+      <instancedMesh ref={dlqRef} args={[undefined, undefined, SERVICEBUS_DLQ_COUNT]}>
+        <boxGeometry args={[0.24, 0.24, 0.24]} />
+        <meshStandardMaterial color={RED} emissive={RED} emissiveIntensity={0.35} wireframe />
+      </instancedMesh>
+
+      {/* main flow: app -> topic -> subscriptions -> consumers */}
+      {SERVICEBUS_SUB_Y.map((y, i) => (
+        <FlowPath key={y} points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, y, 0], [2.7, y, 0]]} count={4} speed={0.13} offset={i * 0.3} color={CYAN} size={0.045} reducedMotion={reducedMotion} />
+      ))}
       {/* a slower, diverted stream — the messages that don't make it through cleanly */}
-      <FlowPath points={[[-0.4, 0, 0], [0.5, -1, -0.3], [1.4, -2, -0.5]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
+      <FlowPath points={[[-0.4, 0, 0], [0.6, -1.1, -0.3], [1.6, -1.4, -0.4]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
     </group>
   );
 }
@@ -1484,8 +1673,8 @@ export function Scene({ progressRef, reducedMotion = false }: { progressRef: Scr
       <KubernetesScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <AksScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <NetworkScene progressRef={progressRef} reducedMotion={reducedMotion} />
-      <SecurityScene reducedMotion={reducedMotion} />
-      <ServiceBusScene reducedMotion={reducedMotion} />
+      <SecurityScene progressRef={progressRef} reducedMotion={reducedMotion} />
+      <ServiceBusScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <AutomationScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <MonitoringScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <ProductionScene progressRef={progressRef} />
