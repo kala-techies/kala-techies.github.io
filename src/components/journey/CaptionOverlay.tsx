@@ -7,21 +7,30 @@ import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
 
 const textShadow = "0 2px 24px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.8)";
 
-// Pipeline is the first zone with a staged beat sequence (Git -> CI/CD ->
-// Terraform -> Azure, all one continuous zone) rather than a single
-// static caption. Thresholds come from the data itself so the two stay
-// in sync; extracted once at module scope for a stable array reference.
-const PIPELINE_BEATS = sceneCaptions.find((s) => s.id === "pipeline")?.beats ?? [];
-const PIPELINE_BEAT_THRESHOLDS = PIPELINE_BEATS.map((b) => b.at);
+// Zones with a staged beat sequence (one continuous zone, several short
+// lines paced to scroll) instead of a single static caption. Thresholds
+// come from the data itself so the two stay in sync; extracted once at
+// module scope for stable array references. Add one more pair of
+// constants here — and one more useZoneStage call below — for each
+// future zone that gets its own staged sequence.
+function beatThresholds(zoneId: string): number[] {
+  return (sceneCaptions.find((s) => s.id === zoneId)?.beats ?? []).map((b) => b.at);
+}
+const PIPELINE_BEAT_THRESHOLDS = beatThresholds("pipeline");
+const KUBERNETES_BEAT_THRESHOLDS = beatThresholds("kubernetes");
+const AKS_BEAT_THRESHOLDS = beatThresholds("aks");
 
 export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
   const openingStage = useOpeningStage(progressRef);
   const pipelineStage = useZoneStage(progressRef, "pipeline", PIPELINE_BEAT_THRESHOLDS);
-  // The opening ritual and the pipeline's staged beats each have their
-  // own finer-grained key than the zone itself, so every line gets its
-  // own enter/exit rather than the whole zone block just sitting there
-  // while the stage changes underneath it.
-  const key = zone === 0 ? `opening-${openingStage}` : zone === 1 ? `pipeline-${pipelineStage}` : zone;
+  const kubernetesStage = useZoneStage(progressRef, "kubernetes", KUBERNETES_BEAT_THRESHOLDS);
+  const aksStage = useZoneStage(progressRef, "aks", AKS_BEAT_THRESHOLDS);
+  const beatStage = zone === 1 ? pipelineStage : zone === 2 ? kubernetesStage : zone === 3 ? aksStage : undefined;
+  // The opening ritual and each zone's staged beats have their own
+  // finer-grained key than the zone itself, so every line gets its own
+  // enter/exit rather than the whole zone block just sitting there while
+  // the stage changes underneath it.
+  const key = zone === 0 ? `opening-${openingStage}` : beatStage !== undefined ? `${zone}-${beatStage}` : zone;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-10 flex items-end px-6 pb-20 sm:px-10 sm:pb-24 lg:px-16">
@@ -36,7 +45,7 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
           style={{ textShadow }}
         >
           {zone === 0 && <OpeningCaption stage={openingStage} />}
-          {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} beatStage={zone === 1 ? pipelineStage : undefined} />}
+          {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} beatStage={beatStage} />}
           {zone === 11 && <RevealCaption />}
           {zone === 12 && <ImpactCaption />}
           {zone === 13 && <RecommendationsCaption />}

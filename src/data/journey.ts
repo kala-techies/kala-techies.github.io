@@ -35,12 +35,26 @@ export const sceneCaptions: SceneCaption[] = [
     eyebrow: "Scene 03",
     heading: "Kubernetes",
     line: "Containers need somewhere to run — scheduled, connected, and kept alive.",
+    beats: [
+      { at: 0, heading: "Containers", line: "Now we need to run what we just built." },
+      { at: 0.07, heading: "Containers", line: "So I package the application into containers." },
+      { at: 0.14, heading: "Containers", line: "One container is easy." },
+      { at: 0.2, heading: "Containers", line: "Now imagine hundreds." },
+      { at: 0.27, heading: "Kubernetes", line: "Someone has to orchestrate them." },
+      { at: 0.34, heading: "Kubernetes", line: "That's Kubernetes." },
+      { at: 0.46, heading: "Kubernetes", line: "And the cluster has to adapt." },
+    ],
   },
   {
     id: "aks",
     eyebrow: "Scene 04",
     heading: "AKS",
     line: "Kubernetes is powerful. Running it reliably at scale is a different problem.",
+    beats: [
+      { at: 0, heading: "AKS", line: "Now let's operate it at cloud scale." },
+      { at: 0.15, heading: "AKS", line: "This is AKS." },
+      { at: 0.35, heading: "AKS", line: "When demand changes, infrastructure has to change with it." },
+    ],
   },
   {
     id: "network",

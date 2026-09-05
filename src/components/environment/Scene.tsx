@@ -523,8 +523,13 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
     const eased = smoothstep((t - 0.1) / 0.25);
 
     if (containerRef.current) {
-      // the original container fades as its copies take over the frame
-      containerRef.current.scale.setScalar(1 - eased * 0.35);
+      // a quick internal pulse right before the split — "container about
+      // to duplicate," not cubes simply popping into existence — then
+      // the original fades as its copies take over the frame. Doesn't
+      // touch the 0.1-0.35 window itself, just what happens a moment
+      // before it.
+      const prePulse = Math.max(0, 1 - Math.abs(t - 0.07) / 0.035) * 0.16;
+      containerRef.current.scale.setScalar(1 + prePulse - eased * 0.35);
     }
 
     if (multiplyRef.current) {
@@ -672,12 +677,25 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const podMeshRef = useRef<THREE.InstancedMesh>(null);
   const scaleNodeRef = useRef<THREE.Group>(null);
   const scaleMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const scaleOutlineMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const serviceRef = useRef<THREE.Mesh>(null);
+  const nodeOutlineMatRefs = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  const nodeSolidMatRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const kubeDebugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, delta) => {
     if (serviceRef.current && !reducedMotion) serviceRef.current.rotation.z += delta * 0.12;
+
+    // Approach reveal: the three main nodes are wireframe outlines while
+    // still distant (seen from the tail of the pipeline zone) and
+    // resolve to solid bodies as we actually arrive — "something in the
+    // distance, then more, then a real cluster" — using pipeline's own
+    // local progress as the approach signal, since that's what's still
+    // advancing while these nodes are only visible at a distance.
+    const approach = smoothstep((localProgress(progressRef.current, "pipeline") - 0.75) / 0.25);
+    nodeOutlineMatRefs.current.forEach((m) => { if (m) m.opacity = (1 - approach) * 0.6; });
+    nodeSolidMatRefs.current.forEach((m) => { if (m) m.opacity = approach; });
 
     // Scale the cluster out (a 4th node fades in) as the visitor moves
     // through this zone — AKS node-pool scaling, made physical rather
@@ -691,7 +709,10 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     const t = localProgress(progressRef.current, "kubernetes");
     const scaleIn = Math.max(0, Math.min(1, (t - 0.05) / 0.25));
     if (scaleNodeRef.current) scaleNodeRef.current.scale.setScalar(scaleIn);
-    if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
+    // outline first, solid body resolves in after — "structural outline
+    // -> node body -> active," not a single fade
+    if (scaleMatRef.current) scaleMatRef.current.opacity = smoothstep((scaleIn - 0.4) / 0.5);
+    if (scaleOutlineMatRef.current) scaleOutlineMatRef.current.opacity = scaleIn * (1 - smoothstep((scaleIn - 0.5) / 0.4)) * 0.7;
 
     if (DEBUG_3D && scaleNodeRef.current) {
       scaleNodeRef.current.updateMatrixWorld(true);
@@ -726,19 +747,41 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
   return (
     <group position={[0, 0, Z.kubernetes]}>
-      {nodeX.slice(0, 3).map((x) => (
-        <mesh key={x} position={[x, 0.1, 0]}>
-          <cylinderGeometry args={[0.7, 0.78, 0.6, 24]} />
-          <meshStandardMaterial color="#111826" emissive={CYAN} emissiveIntensity={0.2} roughness={0.5} metalness={0.4} />
-        </mesh>
+      {nodeX.slice(0, 3).map((x, i) => (
+        <group key={x} position={[x, 0.1, 0]}>
+          {/* solid body — resolves in as we actually arrive */}
+          <mesh>
+            <cylinderGeometry args={[0.7, 0.78, 0.6, 24]} />
+            <meshStandardMaterial
+              ref={(el) => { nodeSolidMatRefs.current[i] = el; }}
+              color="#111826"
+              emissive={CYAN}
+              emissiveIntensity={0.2}
+              roughness={0.5}
+              metalness={0.4}
+              transparent
+              opacity={1}
+            />
+          </mesh>
+          {/* wireframe outline — what's visible while still a distant shape */}
+          <mesh>
+            <cylinderGeometry args={[0.7, 0.78, 0.6, 12]} />
+            <meshBasicMaterial ref={(el) => { nodeOutlineMatRefs.current[i] = el; }} color={CYAN} wireframe transparent opacity={0} />
+          </mesh>
+        </group>
       ))}
 
       {/* the scaling node — invisible until scroll progress inside this
-          zone crosses the threshold, then grows in */}
+          zone crosses the threshold, then assembles: outline first, then
+          a solid body once it's actually active */}
       <group ref={scaleNodeRef} position={[nodeX[3], 0.1, -9]} scale={0}>
         <mesh>
           <cylinderGeometry args={[0.7, 0.78, 0.6, 24]} />
           <meshStandardMaterial ref={scaleMatRef} color="#111826" emissive={AMBER} emissiveIntensity={0.3} transparent opacity={0} roughness={0.5} metalness={0.4} />
+        </mesh>
+        <mesh>
+          <cylinderGeometry args={[0.7, 0.78, 0.6, 12]} />
+          <meshBasicMaterial ref={scaleOutlineMatRef} color={AMBER} wireframe transparent opacity={0} />
         </mesh>
       </group>
 
@@ -802,12 +845,20 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
     }
 
     if (workloadRef.current) {
-      const activePools = scaleIn > 0.5 ? 3 : 2;
+      // Redistribution as a slide, not a snap: each workload has a "2
+      // pools" position and a "3 pools" position, and eases between them
+      // as the new pool comes online — demand -> capacity ->
+      // redistribution -> stability reading as one continuous motion.
+      const redistribute = smoothstep((scaleIn - 0.35) / 0.35);
       for (let i = 0; i < workloadCount; i++) {
-        const poolIdx = i % activePools;
-        const within = Math.floor(i / activePools) - 1;
-        const poolZ = poolIdx === 2 ? AKS_POOL_C_Z : 0;
-        dummy.position.set(AKS_POOL_X[poolIdx] + within * 0.34, 1.05, poolZ + within * 0.3);
+        const poolIdx2 = i % 2;
+        const within2 = Math.floor(i / 2) - 1;
+        const poolIdx3 = i % 3;
+        const within3 = Math.floor(i / 3) - 1;
+        const poolZ3 = poolIdx3 === 2 ? AKS_POOL_C_Z : 0;
+        const x = THREE.MathUtils.lerp(AKS_POOL_X[poolIdx2] + within2 * 0.34, AKS_POOL_X[poolIdx3] + within3 * 0.34, redistribute);
+        const z = THREE.MathUtils.lerp(within2 * 0.3, poolZ3 + within3 * 0.3, redistribute);
+        dummy.position.set(x, 1.05, z);
         dummy.updateMatrix();
         workloadRef.current.setMatrixAt(i, dummy.matrix);
       }
@@ -864,6 +915,11 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
         color={AZURE}
         opacity={0.35}
       />
+
+      {/* traffic leaving the workloads, extending well past this zone's
+          own end — no hard boundary at the end of AKS, the road toward
+          the network is already visible ahead */}
+      <FlowPath points={[[0, 0.5, -1], [0, 0.2, -8], [0, 0, -16]]} count={6} speed={0.16} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
     </group>
   );
 }
