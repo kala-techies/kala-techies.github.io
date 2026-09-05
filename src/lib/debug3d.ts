@@ -42,7 +42,7 @@ export interface BeatMeta {
 // touching any of these five beats again.
 export const BEAT_META: Record<BeatId, BeatMeta> = {
   pipelineMultiply: { label: "Pipeline container multiply", zone: "pipeline", triggerProgress: 0.1, peakProgress: 0.35 },
-  kubernetesFourthNode: { label: "Kubernetes 4th node scale-in", zone: "kubernetes", triggerProgress: 0.05, peakProgress: 0.32 },
+  kubernetesFourthNode: { label: "Kubernetes 4th node scale-in", zone: "kubernetes", triggerProgress: 0.15, peakProgress: 0.5 },
   aksNodePool: { label: "AKS 3rd node-pool scale-in", zone: "aks", triggerProgress: 0.1, peakProgress: 0.4 },
   networkNsgSplit: { label: "Network NSG accept/reject split", zone: "network", triggerProgress: 0, peakProgress: 0.3 },
   serviceBusToAutomation: { label: "Service Bus -> Automation handoff", zone: "automation", triggerProgress: 0, peakProgress: 0.04 },

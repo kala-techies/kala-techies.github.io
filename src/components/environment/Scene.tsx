@@ -388,15 +388,15 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
     // Scale the cluster out (a 4th node fades in) as the visitor moves
     // through this zone — AKS node-pool scaling, made physical rather
-    // than described. Measured with ?debug3d=1: this node sits at the
-    // same world-z as the other three (the zone's own start anchor), and
-    // the camera reaches that z at local progress 0 — the previous 0.75
-    // completion point was always behind the camera (confirmed: BEHIND,
-    // 108deg off-axis). Its own -6 local z offset (see JSX below) pushes
-    // its actual pass-point out to local progress 0.5, and completing by
-    // 0.32 leaves real margin before that.
+    // than described. Measured with ?debug3d=1: with a -6 local z offset
+    // and 0.32 completion, this node was technically in front of the
+    // camera but at 67deg off-axis (outside the FOV) — its x=5.6 lateral
+    // offset is far enough out that -6 of depth wasn't enough to bring
+    // the viewing angle down. Pushed to -9 (pass-point local progress
+    // 0.75) with completion at 0.5, giving a much shallower angle at the
+    // moment it matters.
     const t = localProgress(progressRef.current, "kubernetes");
-    const scaleIn = Math.max(0, Math.min(1, (t - 0.05) / 0.27));
+    const scaleIn = Math.max(0, Math.min(1, (t - 0.15) / 0.35));
     if (scaleNodeRef.current) scaleNodeRef.current.scale.setScalar(scaleIn);
     if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
 
@@ -442,7 +442,7 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
       {/* the scaling node — invisible until scroll progress inside this
           zone crosses the threshold, then grows in */}
-      <group ref={scaleNodeRef} position={[nodeX[3], 0.1, -6]} scale={0}>
+      <group ref={scaleNodeRef} position={[nodeX[3], 0.1, -9]} scale={0}>
         <mesh>
           <cylinderGeometry args={[0.7, 0.78, 0.6, 24]} />
           <meshStandardMaterial ref={scaleMatRef} color="#111826" emissive={AMBER} emissiveIntensity={0.3} transparent opacity={0} roughness={0.5} metalness={0.4} />
