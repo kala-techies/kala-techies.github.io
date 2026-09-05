@@ -77,13 +77,17 @@ export function withinZone(progress: number, zoneId: ZoneId, buffer = 0.02): boo
 
 /** How "inside" the reveal zone we are, 0→1→0, used to blend the camera
  * into an elevated pull-back view and back out smoothly rather than
- * snapping. */
-export function revealBlend(progress: number): number {
+ * snapping. Ramps in/out over a small fixed buffer immediately adjacent
+ * to the reveal zone's own boundaries — not the full width of the DR/
+ * Impact zones on either side, which would eat into their own screen
+ * time (DR's failover, in particular, needs its whole zone to play out
+ * before the camera pulls back to look at it from a distance). */
+export function revealBlend(progress: number, buffer = 0.03): number {
   const idx = REVEAL_ZONE_INDEX;
-  const start = ZONE_BOUNDARIES[idx - 1];
   const mid0 = ZONE_BOUNDARIES[idx];
   const mid1 = ZONE_BOUNDARIES[idx + 1];
-  const end = ZONE_BOUNDARIES[idx + 2];
+  const start = mid0 - buffer;
+  const end = mid1 + buffer;
   if (progress <= start || progress >= end) return 0;
   if (progress < mid0) return (progress - start) / (mid0 - start);
   if (progress > mid1) return 1 - (progress - mid1) / (end - mid1);
