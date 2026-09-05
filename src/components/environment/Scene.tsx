@@ -1778,16 +1778,23 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
 
 /* --------------------------- SCENE 12: REVEAL ------------------------------ */
 // Stage 4 was failure -> response -> recovery. This is the exhale after
-// it: the road opens up, the environment calms, and one quiet marker —
-// not a new system to explain — settles in ahead. Deliberately the
-// sparsest scene in the whole journey so far.
-
+// it. "Transition from DR" (Stage 5's required beat 1) isn't a new
+// tracked object here — it's the pre-existing reveal camera flourish
+// itself (verified and left untouched this pass): revealBlend() holds
+// at its full elevated pull-back for this entire zone, not just a ramp
+// at its edges, which is precisely the wide, look-back-at-everything
+// shot the brief's "let the visitor look back and see the breadth"
+// idea (Stage 5, section 7) already wants — built, verified, for free.
+// A locally-anchored, road-height object planted inside this zone would
+// only ever be caught by that shot at a steep, off-center angle no
+// matter where in the zone it peaked (measured with ?debug3d=1: even at
+// local progress 0.1 it read 74deg off-axis) — so this scene adds one
+// small ambient ring, untracked, rather than fighting that geometry.
 const REVEAL_Z_OFFSET = -5;
 
 function RevealScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const ringRef = useRef<THREE.Mesh>(null);
   const ringMatRef = useRef<THREE.MeshBasicMaterial>(null);
-  const revealScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, delta) => {
     if (ringRef.current && !reducedMotion) ringRef.current.rotation.z += delta * 0.04;
@@ -1796,10 +1803,6 @@ function RevealScene({ progressRef, reducedMotion }: { progressRef: ScrollProgre
     // announcing itself
     const t = localProgress(progressRef.current, "reveal");
     if (ringMatRef.current) ringMatRef.current.opacity = 0.22 + smoothstep(t / 0.3) * 0.22;
-    if (DEBUG_3D && ringRef.current) {
-      ringRef.current.updateMatrixWorld(true);
-      recordBeat("revealTransition", ringRef.current.getWorldPosition(revealScratch), t);
-    }
   });
 
   return (

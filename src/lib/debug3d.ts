@@ -36,7 +36,6 @@ export type BeatId =
   | "drSecondaryReveal"
   | "drFailover"
   | "drStabilization"
-  | "revealTransition"
   | "impactMarker1"
   | "impactMarker2"
   | "recommendationMarker1"
@@ -78,7 +77,6 @@ export const BEAT_META: Record<BeatId, BeatMeta> = {
   drSecondaryReveal: { label: "DR secondary environment reveal", zone: "dr", triggerProgress: 0.15, peakProgress: 0.3 },
   drFailover: { label: "DR failover event", zone: "dr", triggerProgress: 0.35, peakProgress: 0.5 },
   drStabilization: { label: "DR recovery stabilization", zone: "dr", triggerProgress: 0.5, peakProgress: 0.55 },
-  revealTransition: { label: "Reveal: environment calms", zone: "reveal", triggerProgress: 0, peakProgress: 0.1 },
   impactMarker1: { label: "Impact marker 1 (Renan)", zone: "impact", triggerProgress: 0, peakProgress: 0.15 },
   impactMarker2: { label: "Impact marker 2 (Manjunath)", zone: "impact", triggerProgress: 0.2, peakProgress: 0.3 },
   recommendationMarker1: { label: "Recommendation marker 1 (Ana)", zone: "recommendations", triggerProgress: 0, peakProgress: 0.12 },
@@ -107,7 +105,6 @@ export const BEAT_ORDER: BeatId[] = [
   "drSecondaryReveal",
   "drFailover",
   "drStabilization",
-  "revealTransition",
   "impactMarker1",
   "impactMarker2",
   "recommendationMarker1",
