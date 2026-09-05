@@ -74,17 +74,52 @@ function ForegroundGlass({ camGroupRef }: { camGroupRef: RefObject<THREE.Group |
 const AKS_REVEAL_BOUNDARY = zoneBoundary("aks");
 const PRODUCTION_LEAN_BOUNDARY = zoneBoundary("production");
 const AUTOMATION_ARRIVE_BOUNDARY = zoneBoundary("automation");
+const IDENTITY_END_BOUNDARY = zoneBoundary("pipeline");
+const IDENTITY_PARK_Z = 12; // ZONE_Z[0] — held fixed through the opening dialogue
 
-function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassRef: RefObject<THREE.Group | null> }) {
+// The bike stays parked through the "hop on" dialogue and only pulls
+// away once the engine starts, in the last quarter of the identity
+// zone's own local progress — the normal zone-to-zone dolly (used for
+// every other zone, already measured safe with the runtime diagnostic)
+// resumes exactly at the identity/pipeline boundary, so there's no jump
+// at the handoff.
+function openingAwareCameraZ(progress: number): number {
+  if (progress > IDENTITY_END_BOUNDARY) return cameraZAtProgress(progress);
+  const t = localProgress(progress, "identity");
+  const accelerate = smoothstep((t - 0.75) / 0.25);
+  return THREE.MathUtils.lerp(IDENTITY_PARK_Z, cameraZAtProgress(IDENTITY_END_BOUNDARY), accelerate);
+}
+
+function Rig({
+  progressRef,
+  glassRef,
+  bikeRef,
+}: {
+  progressRef: ScrollProgressRef;
+  glassRef: RefObject<THREE.Group | null>;
+  bikeRef: RefObject<THREE.Group | null>;
+}) {
   const lightsRef = useRef<THREE.Group>(null);
   const forwardScratch = useMemo(() => new THREE.Vector3(), []);
   const deltaScratch = useMemo(() => new THREE.Vector3(), []);
   const lastDiagLog = useRef(0);
+  const prevProgress = useRef(0);
+  const smoothedVelocity = useRef(0);
 
   useFrame((state, delta) => {
     const { camera, pointer } = state;
     const progress = progressRef.current;
     const reveal = revealBlend(progress);
+
+    // The camera as a physical vehicle: how fast the visitor is moving
+    // through the world right now, smoothed so a single scroll tick
+    // doesn't read as a jolt. Drives a subtle nose-down pitch on
+    // acceleration and nose-up settle on deceleration/stop — this is the
+    // "throttle" feel, not just camera.position.z += scroll.
+    const rawVelocity = (progress - prevProgress.current) / Math.max(delta, 1 / 240);
+    prevProgress.current = progress;
+    smoothedVelocity.current = THREE.MathUtils.damp(smoothedVelocity.current, rawVelocity, 4, delta);
+    const pitch = THREE.MathUtils.clamp(smoothedVelocity.current * 26, -0.8, 0.8);
 
     // Kubernetes -> AKS: the camera pulls back and rises, so the cluster is
     // revealed to be inside a larger Azure envelope rather than the scene
@@ -113,22 +148,37 @@ function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassR
     // holds text zones).
     const targetX = baseX;
     const targetY = baseY + reveal * 24 + aksReveal * 6.5;
-    const targetZ = cameraZAtProgress(progress) + aksReveal * 7.5 - productionLean * 2.2;
+    const targetZ = openingAwareCameraZ(progress) + aksReveal * 7.5 - productionLean * 2.2;
     const lookAheadBase = 15;
     const lookBehindDistance = 76;
     const lookZOffset = THREE.MathUtils.lerp(-lookAheadBase, lookBehindDistance, reveal);
-    const lookY = -0.5 - reveal * 10 - automationArrive * 1.4 - productionLean * 0.6;
+    const lookY = -0.5 - reveal * 10 - automationArrive * 1.4 - productionLean * 0.6 - pitch;
 
     camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 5, delta);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3, delta);
     camera.position.z = THREE.MathUtils.damp(camera.position.z, targetZ, 3.2, delta);
 
-    // A gentle bank during the two biggest reveals — rolling the horizon
-    // slightly rather than always holding it level — resets to upright the
-    // instant the blend fades since it's recomputed fresh every frame.
-    const roll = aksReveal * 0.1 + reveal * 0.05;
+    // A gentle bank during the two biggest reveals, plus a continuous
+    // subtle lean into the lateral drift — banking into the turn rather
+    // than holding the horizon perfectly level, like a bike actually
+    // would. Resets to upright the instant a blend fades since it's all
+    // recomputed fresh every frame.
+    const steerLean = -lateralDrift * 0.14;
+    const roll = aksReveal * 0.1 + reveal * 0.05 + steerLean;
     camera.up.set(Math.sin(roll), Math.cos(roll), 0);
     camera.lookAt(targetX * 0.4, lookY, targetZ + lookZOffset);
+
+    // The bike + rider sit fixed relative to the camera's own facing —
+    // the visitor's POV from the pillion seat, looking over the rider's
+    // shoulder at the road. Using the camera's own quaternion (already
+    // carrying the bank above) rather than hand-tracking basis vectors
+    // keeps this correct through every camera flourish for free.
+    if (bikeRef.current) {
+      bikeRef.current.position.copy(camera.position);
+      bikeRef.current.quaternion.copy(camera.quaternion);
+      bikeRef.current.translateZ(-2.6);
+      bikeRef.current.translateY(-1.1);
+    }
 
     // Runtime diagnostic (?debug3d=1 only): measure, don't re-derive.
     // camera.getWorldDirection() reads the camera's actual forward vector
@@ -200,6 +250,99 @@ function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassR
     <group ref={lightsRef}>
       <pointLight position={[3, 4, 4]} intensity={45} color="#eaf6ff" />
       <pointLight position={[-4, 1, -3]} intensity={22} color={CYAN} />
+    </group>
+  );
+}
+
+// The visitor's vehicle, not a gimmick: this is what makes the journey
+// read as "I'm riding somewhere" instead of "the camera is dollying past
+// scenes." Deliberately abstract/low-poly, matching the rest of the
+// scene's geometric language rather than attempting a realistic model.
+// Parked and facing the visitor during the opening ritual; once the
+// engine starts, the rider turns forward and stays that way until the
+// very end, when they turn back one last time before the closing lines.
+function BikeRider({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const riderRef = useRef<THREE.Group>(null);
+  const frontWheelRef = useRef<THREE.Mesh>(null);
+  const rearWheelRef = useRef<THREE.Mesh>(null);
+  const headlightMatRef = useRef<THREE.MeshBasicMaterial>(null);
+
+  useFrame((_, delta) => {
+    const progress = progressRef.current;
+    const openingT = localProgress(progress, "identity");
+    const connectT = localProgress(progress, "connect");
+
+    // faces the camera through the opening dialogue, turns forward once
+    // the engine starts, then faces the camera again near the very end
+    const lookBackOpening = 1 - smoothstep((openingT - 0.7) / 0.25);
+    const lookBackEnd = smoothstep((connectT - 0.5) / 0.4);
+    const lookBack = Math.max(lookBackOpening, lookBackEnd);
+    const engineOn = smoothstep((openingT - 0.75) / 0.2);
+
+    if (riderRef.current) riderRef.current.rotation.y = lookBack * Math.PI;
+    if (headlightMatRef.current) headlightMatRef.current.opacity = 0.12 + engineOn * 0.85;
+
+    if (!reducedMotion && engineOn > 0.3) {
+      frontWheelRef.current?.rotateX(delta * 6);
+      rearWheelRef.current?.rotateX(delta * 6);
+    }
+  });
+
+  return (
+    <group>
+      {/* frame */}
+      <mesh position={[0, 0, -0.1]}>
+        <boxGeometry args={[0.34, 0.3, 1.5]} />
+        <meshStandardMaterial color="#111826" roughness={0.4} metalness={0.6} />
+      </mesh>
+      {/* seat */}
+      <mesh position={[0, 0.2, 0.35]}>
+        <boxGeometry args={[0.32, 0.1, 0.55]} />
+        <meshStandardMaterial color="#1c2230" roughness={0.7} />
+      </mesh>
+      {/* wheels */}
+      <mesh ref={frontWheelRef} position={[0, -0.35, -0.95]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.32, 0.07, 10, 24]} />
+        <meshStandardMaterial color="#05070d" roughness={0.5} metalness={0.3} />
+      </mesh>
+      <mesh ref={rearWheelRef} position={[0, -0.35, 0.75]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.34, 0.08, 10, 24]} />
+        <meshStandardMaterial color="#05070d" roughness={0.5} metalness={0.3} />
+      </mesh>
+      {/* handlebar */}
+      <mesh position={[0, 0.15, -0.75]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.5, 8]} />
+        <meshStandardMaterial color="#2c3347" metalness={0.7} roughness={0.3} />
+      </mesh>
+      {/* headlight — dim until the engine starts */}
+      <mesh position={[0, 0, -0.85]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.09, 16]} />
+        <meshBasicMaterial ref={headlightMatRef} color="#eaf6ff" transparent opacity={0.12} />
+      </mesh>
+
+      {/* rider */}
+      <group ref={riderRef} position={[0, 0.55, 0.15]}>
+        <mesh position={[0, 0.15, 0]} rotation={[0.25, 0, 0]}>
+          <capsuleGeometry args={[0.15, 0.4, 4, 8]} />
+          <meshStandardMaterial color="#161b26" roughness={0.6} metalness={0.2} />
+        </mesh>
+        <mesh position={[0, 0.52, -0.08]}>
+          <sphereGeometry args={[0.14, 16, 16]} />
+          <meshStandardMaterial color="#0d1017" roughness={0.4} metalness={0.3} />
+        </mesh>
+        {/* visor — on the forward-facing side, so turning to face the
+            camera is visually obvious even on abstract geometry */}
+        <mesh position={[0, 0.53, -0.2]}>
+          <boxGeometry args={[0.16, 0.07, 0.04]} />
+          <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
+        </mesh>
+        {[-0.16, 0.16].map((x, i) => (
+          <mesh key={i} position={[x, 0.28, -0.35]} rotation={[0.9, 0, 0]}>
+            <cylinderGeometry args={[0.04, 0.04, 0.5, 6]} />
+            <meshStandardMaterial color="#161b26" roughness={0.6} />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
 }
@@ -1105,13 +1248,17 @@ function GlassMoment({ z, tint = "#dff6ff" }: { z: number; tint?: string }) {
 
 export function Scene({ progressRef, reducedMotion = false }: { progressRef: ScrollProgressRef; reducedMotion?: boolean }) {
   const glassRef = useRef<THREE.Group>(null);
+  const bikeRef = useRef<THREE.Group>(null);
 
   return (
     <>
       <fog attach="fog" args={["#05070d", 24, 135]} />
       <ambientLight intensity={0.4} />
       <directionalLight position={[6, 10, 6]} intensity={1.1} color="#eaf6ff" />
-      <Rig progressRef={progressRef} glassRef={glassRef} />
+      <Rig progressRef={progressRef} glassRef={glassRef} bikeRef={bikeRef} />
+      <group ref={bikeRef}>
+        <BikeRider progressRef={progressRef} reducedMotion={reducedMotion} />
+      </group>
 
       <Grid
         position={[0, -2.4, -70]}

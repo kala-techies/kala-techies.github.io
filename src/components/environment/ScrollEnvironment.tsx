@@ -54,7 +54,7 @@ export function ScrollEnvironment() {
         </Suspense>
       </div>
       <GlassFloor />
-      <CaptionOverlay zone={zone} />
+      <CaptionOverlay zone={zone} progressRef={progressRef} />
       <Debug3DOverlay />
 
       {/* Real, linearly-ordered content for screen readers and search

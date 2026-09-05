@@ -1,15 +1,24 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { profile, recommendations, recognitions, projects } from "../../data/profile";
 import { sceneCaptions } from "../../data/journey";
+import { useOpeningStage } from "../../hooks/useOpeningStage";
+import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
 
 const textShadow = "0 2px 24px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.8)";
 
-export function CaptionOverlay({ zone }: { zone: number }) {
+export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
+  const openingStage = useOpeningStage(progressRef);
+  // The opening ritual (parked bike -> "hop on" -> engine start -> name)
+  // has its own finer-grained key than the zone itself, so each line gets
+  // its own enter/exit rather than the whole zone-0 block just sitting
+  // there while the stage changes underneath it.
+  const key = zone === 0 ? `opening-${openingStage}` : zone;
+
   return (
     <div className="pointer-events-none fixed inset-0 z-10 flex items-end px-6 pb-20 sm:px-10 sm:pb-24 lg:px-16">
       <AnimatePresence>
         <motion.div
-          key={zone}
+          key={key}
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10, position: "absolute" }}
@@ -17,7 +26,7 @@ export function CaptionOverlay({ zone }: { zone: number }) {
           className="w-full"
           style={{ textShadow }}
         >
-          {zone === 0 && <IdentityCaption />}
+          {zone === 0 && <OpeningCaption stage={openingStage} />}
           {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} />}
           {zone === 11 && <RevealCaption />}
           {zone === 12 && <ImpactCaption />}
@@ -30,7 +39,21 @@ export function CaptionOverlay({ zone }: { zone: number }) {
   );
 }
 
-function IdentityCaption() {
+// The opening ritual: a few short lines before the ride starts, then the
+// engineer's name arrives as the payoff of "hop on" rather than the
+// immediate landing content. Kept deliberately sparse — this isn't a
+// video game, the environment (bike, engine, headlight) carries most of
+// the beat, not dialogue.
+const OPENING_LINES = ["Hey.", "Thanks for taking the time to be here.", "Hop on.", "I'll show you around."];
+
+function OpeningCaption({ stage }: { stage: number }) {
+  if (stage < OPENING_LINES.length) {
+    return (
+      <div className="mx-auto max-w-lg text-center">
+        <p className="text-2xl font-medium text-ink sm:text-3xl">{OPENING_LINES[stage]}</p>
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-2xl text-center">
       <p className="font-mono text-sm tracking-[0.3em] text-cyan uppercase">{profile.title}</p>
@@ -57,8 +80,10 @@ function SceneCaption({ index }: { index: number }) {
 function RevealCaption() {
   return (
     <div className="mx-auto max-w-lg text-center">
-      <p className="font-mono text-xs tracking-widest text-cyan uppercase">One system</p>
-      <h2 className="mt-2 text-2xl font-semibold text-ink sm:text-3xl">Everything you just walked through is connected.</h2>
+      <p className="font-mono text-xs tracking-widest text-cyan uppercase">That's the stack</p>
+      <h2 className="mt-2 text-2xl font-semibold text-ink sm:text-3xl">
+        The technology is only half the story — the real work is keeping all of it working together.
+      </h2>
     </div>
   );
 }
@@ -66,7 +91,7 @@ function RevealCaption() {
 function ImpactCaption() {
   return (
     <div className="max-w-md">
-      <p className="font-mono text-xs tracking-widest text-amber uppercase">Impact</p>
+      <p className="font-mono text-xs tracking-widest text-amber uppercase">What people noticed</p>
       <div className="mt-3 space-y-4">
         {recognitions.map((r) => (
           <div key={r.name}>
@@ -98,7 +123,7 @@ function RecommendationsCaption() {
 function WorkCaption() {
   return (
     <div className="max-w-md">
-      <p className="font-mono text-xs tracking-widest text-violet uppercase">Selected Work</p>
+      <p className="font-mono text-xs tracking-widest text-violet uppercase">When I'm not on the clock</p>
       <div className="mt-3 space-y-2">
         {projects.map((p) => (
           <p key={p.name} className="text-ink-dim">
@@ -112,9 +137,10 @@ function WorkCaption() {
 
 function ConnectCaption() {
   return (
-    <div className="pointer-events-auto max-w-md">
-      <p className="font-mono text-xs tracking-widest text-cyan uppercase">Connect</p>
-      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-lg">
+    <div className="pointer-events-auto mx-auto max-w-md text-center">
+      <p className="text-xl font-medium text-ink">Thanks for coming along.</p>
+      <p className="mt-2 text-ink-dim">If you'd like to build something together, let's talk.</p>
+      <div className="mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-lg">
         <a href={profile.linkedin} target="_blank" rel="noreferrer" className="text-ink transition-colors hover:text-cyan">
           LinkedIn
         </a>

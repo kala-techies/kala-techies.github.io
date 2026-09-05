@@ -13,7 +13,9 @@ export function JourneyFallback({ visuallyHidden = false }: { visuallyHidden?: b
   return (
     <div className={visuallyHidden ? "sr-only" : "relative mx-auto max-w-2xl px-6 py-24 sm:px-8"}>
       <section className="py-16 text-center">
-        <p className="font-mono text-sm tracking-[0.3em] text-cyan uppercase">{profile.title}</p>
+        <p className="text-ink-dim">Hey. Thanks for taking the time to be here.</p>
+        <p className="mt-1 text-ink-dim">Hop on — I'll show you around.</p>
+        <p className="mt-6 font-mono text-sm tracking-[0.3em] text-cyan uppercase">{profile.title}</p>
         <h1 className="mt-4 text-5xl font-semibold text-ink">{profile.name}</h1>
         <p className="mx-auto mt-5 max-w-md text-lg text-ink-dim">{profile.positioning}</p>
         <p className="mt-6 font-mono text-xs tracking-widest text-ink-faint">{profile.employers.join("  ·  ")}</p>
@@ -28,12 +30,14 @@ export function JourneyFallback({ visuallyHidden = false }: { visuallyHidden?: b
       ))}
 
       <section className="py-16 text-center">
-        <p className="font-mono text-xs tracking-widest text-cyan uppercase">One system</p>
-        <h2 className="mt-2 text-2xl font-semibold text-ink">Everything you just walked through is connected.</h2>
+        <p className="font-mono text-xs tracking-widest text-cyan uppercase">That's the stack</p>
+        <h2 className="mt-2 text-2xl font-semibold text-ink">
+          The technology is only half the story — the real work is keeping all of it working together.
+        </h2>
       </section>
 
       <section className="py-16">
-        <p className="font-mono text-xs tracking-widest text-amber uppercase">Impact</p>
+        <p className="font-mono text-xs tracking-widest text-amber uppercase">What people noticed</p>
         <div className="mt-4 space-y-4">
           {recognitions.map((r) => (
             <div key={r.name}>
@@ -59,7 +63,7 @@ export function JourneyFallback({ visuallyHidden = false }: { visuallyHidden?: b
       </section>
 
       <section className="py-16">
-        <p className="font-mono text-xs tracking-widest text-violet uppercase">Selected Work</p>
+        <p className="font-mono text-xs tracking-widest text-violet uppercase">When I'm not on the clock</p>
         <div className="mt-4 space-y-2">
           {projects.map((p) => (
             <p key={p.name} className="text-ink-dim">
@@ -70,7 +74,8 @@ export function JourneyFallback({ visuallyHidden = false }: { visuallyHidden?: b
       </section>
 
       <section id="connect" className="py-16">
-        <p className="font-mono text-xs tracking-widest text-cyan uppercase">Connect</p>
+        <p className="text-lg font-medium text-ink">Thanks for coming along.</p>
+        <p className="mt-1 text-ink-dim">If you'd like to build something together, let's talk.</p>
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-lg">
           <a href={profile.linkedin} target="_blank" rel="noreferrer" className="text-ink transition-colors hover:text-cyan">
             LinkedIn
