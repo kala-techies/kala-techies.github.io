@@ -173,10 +173,17 @@ function Rig({
     // shoulder at the road. Using the camera's own quaternion (already
     // carrying the bank above) rather than hand-tracking basis vectors
     // keeps this correct through every camera flourish for free.
+    //
+    // "Hop on": the visitor starts a little further back — not yet
+    // seated — and settles into the normal riding distance right as that
+    // line lands, rather than simply always sitting in the final spot.
+    const openingTForSeat = localProgress(progress, "identity");
+    const seatSettle = smoothstep((openingTForSeat - 0.35) / 0.25);
+    const seatOffset = THREE.MathUtils.lerp(-3.05, -2.6, seatSettle);
     if (bikeRef.current) {
       bikeRef.current.position.copy(camera.position);
       bikeRef.current.quaternion.copy(camera.quaternion);
-      bikeRef.current.translateZ(-2.6);
+      bikeRef.current.translateZ(seatOffset);
       bikeRef.current.translateY(-1.1);
     }
 
@@ -261,87 +268,160 @@ function Rig({
 // Parked and facing the visitor during the opening ritual; once the
 // engine starts, the rider turns forward and stays that way until the
 // very end, when they turn back one last time before the closing lines.
+// Coarse "what's worth looking at" direction per zone — not a precise
+// per-object targeting system, but enough that the rider's attention
+// visibly shifts toward where each zone's hero content actually sits
+// (Kubernetes' 4th node and AKS's 3rd pool both land to the right;
+// Security's gate-then-vault sequence starts to the left), so the ride
+// reads as being guided rather than just moved through.
+const ZONE_INTEREST_LEAN: Partial<Record<string, number>> = {
+  pipeline: -0.4,
+  kubernetes: 0.6,
+  aks: 0.6,
+  network: 0.4,
+  security: -0.6,
+  automation: 0.6,
+  production: 0.6,
+};
+
 function BikeRider({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const riderRef = useRef<THREE.Group>(null);
+  const torsoRef = useRef<THREE.Mesh>(null);
+  const armRefs = useRef<(THREE.Mesh | null)[]>([]);
   const frontWheelRef = useRef<THREE.Mesh>(null);
   const rearWheelRef = useRef<THREE.Mesh>(null);
   const headlightMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const vibrateRef = useRef<THREE.Group>(null);
+  const leanSmoothed = useRef(0);
+  const prevProgress = useRef(0);
+  const smoothedVelocity = useRef(0);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const progress = progressRef.current;
     const openingT = localProgress(progress, "identity");
     const connectT = localProgress(progress, "connect");
 
-    // faces the camera through the opening dialogue, turns forward once
-    // the engine starts, then faces the camera again near the very end
-    const lookBackOpening = 1 - smoothstep((openingT - 0.7) / 0.25);
+    // A short beat of stillness before anything happens, then a small
+    // cascade of distinct actions rather than everything snapping at
+    // once: turn to face forward, hands settle onto the bars, engine
+    // catches, then (via openingAwareCameraZ, elsewhere) we accelerate.
+    const turnForward = smoothstep((openingT - 0.75) / 0.1);
+    const handsReady = smoothstep((openingT - 0.82) / 0.08);
+    const engineOn = smoothstep((openingT - 0.85) / 0.1);
+    // a subtle gesture toward the seat right on "Hop on."
+    const hopGesture = Math.max(0, 1 - Math.abs(openingT - 0.45) / 0.12);
+
+    const lookBackOpening = 1 - turnForward;
     const lookBackEnd = smoothstep((connectT - 0.5) / 0.4);
     const lookBack = Math.max(lookBackOpening, lookBackEnd);
-    const engineOn = smoothstep((openingT - 0.75) / 0.2);
 
-    if (riderRef.current) riderRef.current.rotation.y = lookBack * Math.PI;
+    // once riding, a coarse lean toward whatever this zone's hero content
+    // actually is — not applied at all while facing the visitor, so it
+    // never fights the opening/ending "look back" beats
+    const zoneId = ZONE_IDS[activeZoneAtProgress(progress)];
+    const interestTarget = ZONE_INTEREST_LEAN[zoneId] ?? 0;
+    leanSmoothed.current = THREE.MathUtils.damp(leanSmoothed.current, interestTarget, 1.2, delta);
+
+    if (riderRef.current) {
+      riderRef.current.rotation.y = THREE.MathUtils.lerp(leanSmoothed.current * 0.3, Math.PI, lookBack);
+    }
     if (headlightMatRef.current) headlightMatRef.current.opacity = 0.12 + engineOn * 0.85;
+
+    // acceleration/braking posture — smoothed scroll velocity, same
+    // formula as the camera's own throttle feel, computed independently
+    // here rather than threaded through a prop
+    const rawVelocity = (progress - prevProgress.current) / Math.max(delta, 1 / 240);
+    prevProgress.current = progress;
+    smoothedVelocity.current = THREE.MathUtils.damp(smoothedVelocity.current, rawVelocity, 4, delta);
+    const brakingLean = THREE.MathUtils.clamp(smoothedVelocity.current * 30, -0.12, 0.12);
+    if (torsoRef.current) torsoRef.current.rotation.x = 0.25 - brakingLean;
+
+    // the "hop on" gesture: one arm lifts briefly, independent of the
+    // handlebar-ready pose that follows once the engine starts
+    const armLift = hopGesture * (1 - handsReady) * 0.7;
+    armRefs.current.forEach((arm, i) => {
+      if (!arm) return;
+      const side = i === 0 ? 1 : -1;
+      arm.rotation.z = side * armLift;
+      arm.rotation.x = THREE.MathUtils.lerp(0.5, 0.9, handsReady);
+    });
 
     if (!reducedMotion && engineOn > 0.3) {
       frontWheelRef.current?.rotateX(delta * 6);
       rearWheelRef.current?.rotateX(delta * 6);
     }
+
+    // a faint idle vibration once the engine has caught, on the visual
+    // geometry only — never on the camera-tracked outer group, so it
+    // can't perturb any beat's measured position
+    if (vibrateRef.current) {
+      if (!reducedMotion && engineOn > 0.05) {
+        const t = state.clock.elapsedTime;
+        vibrateRef.current.position.set(Math.sin(t * 47) * 0.004 * engineOn, Math.sin(t * 61 + 1) * 0.003 * engineOn, 0);
+      } else {
+        vibrateRef.current.position.set(0, 0, 0);
+      }
+    }
   });
 
   return (
     <group>
-      {/* frame */}
-      <mesh position={[0, 0, -0.1]}>
-        <boxGeometry args={[0.34, 0.3, 1.5]} />
-        <meshStandardMaterial color="#111826" roughness={0.4} metalness={0.6} />
-      </mesh>
-      {/* seat */}
-      <mesh position={[0, 0.2, 0.35]}>
-        <boxGeometry args={[0.32, 0.1, 0.55]} />
-        <meshStandardMaterial color="#1c2230" roughness={0.7} />
-      </mesh>
-      {/* wheels */}
-      <mesh ref={frontWheelRef} position={[0, -0.35, -0.95]} rotation={[0, Math.PI / 2, 0]}>
-        <torusGeometry args={[0.32, 0.07, 10, 24]} />
-        <meshStandardMaterial color="#05070d" roughness={0.5} metalness={0.3} />
-      </mesh>
-      <mesh ref={rearWheelRef} position={[0, -0.35, 0.75]} rotation={[0, Math.PI / 2, 0]}>
-        <torusGeometry args={[0.34, 0.08, 10, 24]} />
-        <meshStandardMaterial color="#05070d" roughness={0.5} metalness={0.3} />
-      </mesh>
-      {/* handlebar */}
-      <mesh position={[0, 0.15, -0.75]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.02, 0.02, 0.5, 8]} />
-        <meshStandardMaterial color="#2c3347" metalness={0.7} roughness={0.3} />
-      </mesh>
-      {/* headlight — dim until the engine starts */}
-      <mesh position={[0, 0, -0.85]} rotation={[Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.09, 16]} />
-        <meshBasicMaterial ref={headlightMatRef} color="#eaf6ff" transparent opacity={0.12} />
-      </mesh>
+      {/* settling into the seat happens as a camera offset (see Rig) —
+          the geometry itself just idles until the engine cascade begins */}
+      <group ref={vibrateRef}>
+        {/* frame */}
+        <mesh position={[0, 0, -0.1]}>
+          <boxGeometry args={[0.34, 0.3, 1.5]} />
+          <meshStandardMaterial color="#111826" roughness={0.4} metalness={0.6} />
+        </mesh>
+        {/* seat */}
+        <mesh position={[0, 0.2, 0.35]}>
+          <boxGeometry args={[0.32, 0.1, 0.55]} />
+          <meshStandardMaterial color="#1c2230" roughness={0.7} />
+        </mesh>
+        {/* wheels */}
+        <mesh ref={frontWheelRef} position={[0, -0.35, -0.95]} rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[0.32, 0.07, 10, 24]} />
+          <meshStandardMaterial color="#05070d" roughness={0.5} metalness={0.3} />
+        </mesh>
+        <mesh ref={rearWheelRef} position={[0, -0.35, 0.75]} rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[0.34, 0.08, 10, 24]} />
+          <meshStandardMaterial color="#05070d" roughness={0.5} metalness={0.3} />
+        </mesh>
+        {/* handlebar */}
+        <mesh position={[0, 0.15, -0.75]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.02, 0.02, 0.5, 8]} />
+          <meshStandardMaterial color="#2c3347" metalness={0.7} roughness={0.3} />
+        </mesh>
+        {/* headlight — dim until the engine starts */}
+        <mesh position={[0, 0, -0.85]} rotation={[Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.09, 16]} />
+          <meshBasicMaterial ref={headlightMatRef} color="#eaf6ff" transparent opacity={0.12} />
+        </mesh>
 
-      {/* rider */}
-      <group ref={riderRef} position={[0, 0.55, 0.15]}>
-        <mesh position={[0, 0.15, 0]} rotation={[0.25, 0, 0]}>
-          <capsuleGeometry args={[0.15, 0.4, 4, 8]} />
-          <meshStandardMaterial color="#161b26" roughness={0.6} metalness={0.2} />
-        </mesh>
-        <mesh position={[0, 0.52, -0.08]}>
-          <sphereGeometry args={[0.14, 16, 16]} />
-          <meshStandardMaterial color="#0d1017" roughness={0.4} metalness={0.3} />
-        </mesh>
-        {/* visor — on the forward-facing side, so turning to face the
-            camera is visually obvious even on abstract geometry */}
-        <mesh position={[0, 0.53, -0.2]}>
-          <boxGeometry args={[0.16, 0.07, 0.04]} />
-          <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
-        </mesh>
-        {[-0.16, 0.16].map((x, i) => (
-          <mesh key={i} position={[x, 0.28, -0.35]} rotation={[0.9, 0, 0]}>
-            <cylinderGeometry args={[0.04, 0.04, 0.5, 6]} />
-            <meshStandardMaterial color="#161b26" roughness={0.6} />
+        {/* rider */}
+        <group ref={riderRef} position={[0, 0.55, 0.15]}>
+          <mesh ref={torsoRef} position={[0, 0.15, 0]} rotation={[0.25, 0, 0]}>
+            <capsuleGeometry args={[0.15, 0.4, 4, 8]} />
+            <meshStandardMaterial color="#161b26" roughness={0.6} metalness={0.2} />
           </mesh>
-        ))}
+          <mesh position={[0, 0.52, -0.08]}>
+            <sphereGeometry args={[0.14, 16, 16]} />
+            <meshStandardMaterial color="#0d1017" roughness={0.4} metalness={0.3} />
+          </mesh>
+          {/* visor — on the forward-facing side, so turning to face the
+              camera is visually obvious even on abstract geometry */}
+          <mesh position={[0, 0.53, -0.2]}>
+            <boxGeometry args={[0.16, 0.07, 0.04]} />
+            <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
+          </mesh>
+          {[-0.16, 0.16].map((x, i) => (
+            <mesh key={i} ref={(el) => { armRefs.current[i] = el; }} position={[x, 0.28, -0.35]} rotation={[0.5, 0, 0]}>
+              <cylinderGeometry args={[0.04, 0.04, 0.5, 6]} />
+              <meshStandardMaterial color="#161b26" roughness={0.6} />
+            </mesh>
+          ))}
+        </group>
       </group>
     </group>
   );

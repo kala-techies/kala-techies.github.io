@@ -8,7 +8,10 @@ import { localProgress } from "../components/environment/zones";
 // requestAnimationFrame, for the same reason: rAF is throttled or paused
 // in backgrounded tabs, and this drives the very first thing a visitor
 // sees.
-const STAGE_THRESHOLDS = [0, 0.15, 0.35, 0.55, 0.75, 1.01];
+// Stage 0 gets extra room before the first line — a beat of silence
+// with the bike simply parked, so the visitor has a moment to register
+// "where am I" before any dialogue starts.
+const STAGE_THRESHOLDS = [0, 0.22, 0.4, 0.58, 0.75, 1.01];
 
 export function useOpeningStage(progressRef: ScrollProgressRef): number {
   const [stage, setStage] = useState(0);
