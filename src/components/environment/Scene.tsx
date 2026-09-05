@@ -835,7 +835,11 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       if (DEBUG_3D) {
         reportRef.current.updateMatrixWorld(true);
         recordBeat("automationReport", reportRef.current.getWorldPosition(automationDebugScratch), t);
+        console.warn("[debug3d-temp] recorded automationReport", t, beatSamples.automationReport);
       }
+    } else if (DEBUG_3D) {
+      // TEMP: diagnosing why automationReport never appears in the overlay
+      console.warn("[debug3d-temp] reportRef.current is null", t);
     }
   });
 
