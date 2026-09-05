@@ -1,37 +1,64 @@
 import { Suspense, lazy, useState } from "react";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useScrollProgress } from "../../hooks/useScrollProgress";
+import { useActiveZone } from "../../hooks/useActiveZone";
 import { hasWebGL } from "../../lib/webgl";
 import { EnvironmentFallback } from "./EnvironmentFallback";
 import { GlassFloor } from "./GlassFloor";
+import { CaptionOverlay } from "../journey/CaptionOverlay";
+import { JourneyFallback } from "../journey/JourneyFallback";
 
 // The Canvas import (and therefore all of three/@react-three/fiber/drei)
 // must live inside this lazy boundary, not at this module's top level —
 // ScrollEnvironment itself is mounted eagerly by App.tsx.
 const CanvasScene = lazy(() => import("./CanvasScene").then((m) => ({ default: m.CanvasScene })));
 
+// Total scroll distance driving the journey, in viewport heights.
+const JOURNEY_VH = 900;
+
 /**
- * A single, page-spanning 3D backdrop mounted once and fixed behind all
- * content. Scroll position drives a camera dolly through the journey —
- * not per-section canvases, not sections fading in and out.
+ * The cinematic mode: a fixed, page-spanning 3D canvas whose camera
+ * dollies through 11 zones as the visitor scrolls, with a thin fixed
+ * caption overlay whose content swaps per zone — the DOM is not a series
+ * of sections you scroll past, it's a subtitle track for the 3D journey.
+ * A tall, otherwise-empty spacer supplies the scrollable distance.
+ *
+ * Falls back to a normal linear, accessible page for
+ * `prefers-reduced-motion` or no-WebGL — same content, no camera.
  */
 export function ScrollEnvironment() {
   const reducedMotion = useReducedMotion();
   const [canRender3D] = useState(() => hasWebGL() && !reducedMotion);
   const progressRef = useScrollProgress();
+  const zone = useActiveZone(progressRef);
+
+  if (!canRender3D) {
+    return (
+      <main id="content">
+        <JourneyFallback />
+      </main>
+    );
+  }
 
   return (
     <>
-      {canRender3D ? (
-        <div className="fixed inset-0 -z-10">
-          <Suspense fallback={<EnvironmentFallback />}>
-            <CanvasScene progressRef={progressRef} />
-          </Suspense>
-        </div>
-      ) : (
-        <EnvironmentFallback />
-      )}
+      <div className="fixed inset-0 -z-10">
+        <Suspense fallback={<EnvironmentFallback />}>
+          <CanvasScene progressRef={progressRef} />
+        </Suspense>
+      </div>
       <GlassFloor />
+      <CaptionOverlay zone={zone} />
+
+      {/* Real, linearly-ordered content for screen readers and search
+          crawlers — the visual experience above is a fixed overlay keyed
+          to scroll position, which has no sensible reading order on its
+          own. */}
+      <div id="content" tabIndex={-1}>
+        <JourneyFallback visuallyHidden />
+      </div>
+
+      <div style={{ height: `${JOURNEY_VH}vh` }} aria-hidden="true" />
     </>
   );
 }
