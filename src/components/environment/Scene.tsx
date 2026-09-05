@@ -3,7 +3,18 @@ import { useFrame } from "@react-three/fiber";
 import { Grid } from "@react-three/drei";
 import * as THREE from "three";
 import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
-import { Z, boundaryBlend, cameraZAtProgress, localProgress, revealBlend, withinZone, zoneBoundary } from "./zones";
+import {
+  Z,
+  ZONE_IDS,
+  activeZoneAtProgress,
+  boundaryBlend,
+  cameraZAtProgress,
+  localProgress,
+  revealBlend,
+  withinZone,
+  zoneBoundary,
+} from "./zones";
+import { BEAT_META, BEAT_ORDER, DEBUG_3D, beatSamples, overlayState, recordBeat, type BeatReading } from "../../lib/debug3d";
 
 // How far ahead of the camera a single-hero "climax" scene (one that
 // transforms based on local scroll progress, rather than being staggered
@@ -66,6 +77,9 @@ const AUTOMATION_ARRIVE_BOUNDARY = zoneBoundary("automation");
 
 function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassRef: RefObject<THREE.Group | null> }) {
   const lightsRef = useRef<THREE.Group>(null);
+  const forwardScratch = useMemo(() => new THREE.Vector3(), []);
+  const deltaScratch = useMemo(() => new THREE.Vector3(), []);
+  const lastDiagLog = useRef(0);
 
   useFrame((state, delta) => {
     const { camera, pointer } = state;
@@ -115,6 +129,62 @@ function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassR
     const roll = aksReveal * 0.1 + reveal * 0.05;
     camera.up.set(Math.sin(roll), Math.cos(roll), 0);
     camera.lookAt(targetX * 0.4, lookY, targetZ + lookZOffset);
+
+    // Runtime diagnostic (?debug3d=1 only): measure, don't re-derive.
+    // camera.getWorldDirection() reads the camera's actual forward vector
+    // after lookAt, and each beat's world position is read straight off
+    // its real Object3D (via recordBeat in that scene's own useFrame) —
+    // no hand-approximated frustum math, the real transforms three.js is
+    // already using to render the frame.
+    if (DEBUG_3D && state.clock.elapsedTime - lastDiagLog.current > 0.4) {
+      lastDiagLog.current = state.clock.elapsedTime;
+      camera.getWorldDirection(forwardScratch);
+      const zoneIndex = activeZoneAtProgress(progress);
+      const zoneId = ZONE_IDS[zoneIndex];
+      const perspCamera = camera as THREE.PerspectiveCamera;
+      const halfVFov = THREE.MathUtils.degToRad(perspCamera.fov / 2);
+      const halfHFov = Math.atan(Math.tan(halfVFov) * perspCamera.aspect);
+      const fovLimitDeg = THREE.MathUtils.radToDeg(Math.max(halfVFov, halfHFov)) * 1.15;
+
+      const readings: BeatReading[] = [];
+      for (const id of BEAT_ORDER) {
+        const sample = beatSamples[id];
+        const meta = BEAT_META[id];
+        if (!sample) continue;
+        deltaScratch.copy(sample.worldPos).sub(camera.position);
+        const distance = deltaScratch.length();
+        const dot = distance > 0 ? deltaScratch.dot(forwardScratch) / distance : 0;
+        const angleDeg = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(dot, -1, 1)));
+        readings.push({
+          id,
+          label: meta.label,
+          zone: meta.zone,
+          zoneLocalProgress: sample.zoneLocalProgress,
+          triggerProgress: meta.triggerProgress,
+          peakProgress: meta.peakProgress,
+          atPeak: Math.abs(sample.zoneLocalProgress - meta.peakProgress) < 0.05,
+          distance,
+          dot,
+          angleDeg,
+          front: dot > 0,
+          withinFov: angleDeg < fovLimitDeg,
+        });
+      }
+
+      const lines = [
+        `zone: ${zoneId}  (progress ${progress.toFixed(3)})`,
+        `camera pos: (${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)})`,
+        `camera fwd: (${forwardScratch.x.toFixed(2)}, ${forwardScratch.y.toFixed(2)}, ${forwardScratch.z.toFixed(2)})`,
+        "",
+        ...readings.map((r) => {
+          const flag = r.atPeak ? (r.front && r.withinFov ? "PEAK OK" : "PEAK FAIL") : "";
+          return `${r.label.padEnd(30)} d=${r.distance.toFixed(1).padStart(5)}  angle=${r.angleDeg.toFixed(0).padStart(3)}°  ${r.front ? "FRONT " : "BEHIND"}  ${r.withinFov ? "in-fov" : "off-fov"}  loc=${r.zoneLocalProgress.toFixed(2)}  ${flag}`;
+        }),
+      ];
+      overlayState.lines = lines;
+      // eslint-disable-next-line no-console
+      console.log("[debug3d]\n" + lines.join("\n"));
+    }
 
     if (lightsRef.current) lightsRef.current.position.copy(camera.position);
 
@@ -193,6 +263,7 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
   const multiplyRef = useRef<THREE.InstancedMesh>(null);
   const containerRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const debugScratch = useMemo(() => new THREE.Vector3(), []);
 
   const buildFragments = useMemo(
     () =>
@@ -229,6 +300,15 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
         multiplyRef.current.setMatrixAt(i, dummy.matrix);
       }
       multiplyRef.current.instanceMatrix.needsUpdate = true;
+
+      if (DEBUG_3D) {
+        // the center instance (x=0) is a representative sample of where
+        // the multiply beat actually is at this moment
+        debugScratch.set(0, THREE.MathUtils.lerp(0, -0.1, eased), THREE.MathUtils.lerp(-0.3, -6.2, eased));
+        multiplyRef.current.updateMatrixWorld(true);
+        multiplyRef.current.localToWorld(debugScratch);
+        recordBeat("pipelineMultiply", debugScratch, t);
+      }
     }
   });
 
@@ -298,6 +378,7 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const scaleMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const serviceRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const kubeDebugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, delta) => {
     if (serviceRef.current && !reducedMotion) serviceRef.current.rotation.z += delta * 0.12;
@@ -309,6 +390,11 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     const scaleIn = Math.max(0, Math.min(1, (t - 0.35) / 0.4));
     if (scaleNodeRef.current) scaleNodeRef.current.scale.setScalar(scaleIn);
     if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
+
+    if (DEBUG_3D && scaleNodeRef.current) {
+      scaleNodeRef.current.updateMatrixWorld(true);
+      recordBeat("kubernetesFourthNode", scaleNodeRef.current.getWorldPosition(kubeDebugScratch), t);
+    }
 
     if (!podMeshRef.current) return;
     const elapsed = reducedMotion ? 0 : state.clock.elapsedTime;
@@ -391,6 +477,7 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
   const workloadRef = useRef<THREE.InstancedMesh>(null);
   const envelopeRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const aksDebugScratch = useMemo(() => new THREE.Vector3(), []);
   const workloadCount = 9;
 
   useFrame((_, delta) => {
@@ -400,6 +487,11 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
     const scaleIn = smoothstep((t - 0.25) / 0.4);
     if (poolCRef.current) poolCRef.current.scale.setScalar(scaleIn);
     if (poolMatRef.current) poolMatRef.current.opacity = scaleIn * 0.9;
+
+    if (DEBUG_3D && poolCRef.current) {
+      poolCRef.current.updateMatrixWorld(true);
+      recordBeat("aksNodePool", poolCRef.current.getWorldPosition(aksDebugScratch), t);
+    }
 
     if (workloadRef.current) {
       const activePools = scaleIn > 0.5 ? 3 : 2;
@@ -466,9 +558,21 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
 // Traffic reaches the NSG gate and splits: most continues through the
 // private endpoint, some is visibly diverted and never arrives.
 
-function NetworkScene({ reducedMotion }: { reducedMotion: boolean }) {
+function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const nsgScratch = useMemo(() => new THREE.Vector3(), []);
+
+  useFrame(() => {
+    if (DEBUG_3D && groupRef.current) {
+      groupRef.current.updateMatrixWorld(true);
+      nsgScratch.set(1.7, 0, 0);
+      groupRef.current.localToWorld(nsgScratch);
+      recordBeat("networkNsgSplit", nsgScratch, localProgress(progressRef.current, "network"));
+    }
+  });
+
   return (
-    <group position={[0, 0, Z.network]}>
+    <group ref={groupRef} position={[0, 0, Z.network]}>
       <mesh>
         <boxGeometry args={[5, 2, 3.6]} />
         <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.4} />
@@ -638,9 +742,15 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const greenColor = useMemo(() => new THREE.Color(GREEN), []);
   const instanceColor = useMemo(() => new THREE.Color(), []);
   const chaosColor = useMemo(() => new THREE.Color(), []);
+  const automationDebugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state) => {
     const t = localProgress(progressRef.current, "automation");
+
+    if (DEBUG_3D && scatteredMeshRef.current) {
+      scatteredMeshRef.current.updateMatrixWorld(true);
+      recordBeat("serviceBusToAutomation", scatteredMeshRef.current.getWorldPosition(automationDebugScratch), t);
+    }
 
     // ACT 1 — CHAOS -> ORDER (0 – 0.5)
     const orderEased = smoothstep(t / 0.5);
@@ -737,6 +847,7 @@ function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const signalRef = useRef<THREE.Mesh>(null);
   const signalMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const orbitRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const monitorDebugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, delta) => {
     if (ringRef.current && !reducedMotion) ringRef.current.rotation.z += delta * 0.15;
@@ -761,6 +872,11 @@ function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       const fadeIn = smoothstep(alertT / 0.08);
       const fadeOut = 1 - smoothstep((alertT - 0.82) / 0.18);
       signalMatRef.current.opacity = 0.9 * fadeIn * fadeOut;
+
+      if (DEBUG_3D) {
+        signalRef.current.updateMatrixWorld(true);
+        recordBeat("monitoringSignal", signalRef.current.getWorldPosition(monitorDebugScratch), t);
+      }
     }
   });
 
@@ -797,6 +913,7 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
   const alertRingRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   const alertMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const productionDebugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, delta) => {
     if (ringRef.current) ringRef.current.rotation.z += delta * 0.3;
@@ -829,6 +946,11 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
       const expand = (state.clock.elapsedTime * 0.6) % 1;
       alertRingRef.current.scale.setScalar(1 + expand * 2.5);
       alertMatRef.current.opacity = alertPhase * (1 - expand) * 0.6;
+    }
+
+    if (DEBUG_3D && coreRef.current) {
+      coreRef.current.updateMatrixWorld(true);
+      recordBeat("productionIncident", coreRef.current.getWorldPosition(productionDebugScratch), t);
     }
   });
 
@@ -863,6 +985,7 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
   const beamRef = useRef<THREE.Mesh>(null);
   const primaryMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const secondaryMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const drDebugScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state) => {
     // Same fixed-lead, own-zone-only tracking as Production — without it,
@@ -884,6 +1007,13 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
       const m = beamRef.current.material as THREE.MeshBasicMaterial;
       const failoverPulse = t > 0.35 && t < 0.65 ? 0.5 : 0.2;
       m.opacity = failoverPulse + (Math.sin(state.clock.elapsedTime * 1.5) + 1) * 0.15;
+    }
+
+    if (DEBUG_3D && groupRef.current) {
+      groupRef.current.updateMatrixWorld(true);
+      drDebugScratch.set(0, 0.05, (DR_PRIMARY_LEAD + DR_SECONDARY_LEAD) / 2);
+      groupRef.current.localToWorld(drDebugScratch);
+      recordBeat("drFailover", drDebugScratch, t);
     }
   });
 
@@ -953,7 +1083,7 @@ export function Scene({ progressRef, reducedMotion = false }: { progressRef: Scr
       <PipelineScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <KubernetesScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <AksScene progressRef={progressRef} reducedMotion={reducedMotion} />
-      <NetworkScene reducedMotion={reducedMotion} />
+      <NetworkScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <SecurityScene reducedMotion={reducedMotion} />
       <ServiceBusScene reducedMotion={reducedMotion} />
       <AutomationScene progressRef={progressRef} reducedMotion={reducedMotion} />

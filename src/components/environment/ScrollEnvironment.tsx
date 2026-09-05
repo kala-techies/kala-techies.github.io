@@ -7,6 +7,7 @@ import { EnvironmentFallback } from "./EnvironmentFallback";
 import { GlassFloor } from "./GlassFloor";
 import { CaptionOverlay } from "../journey/CaptionOverlay";
 import { JourneyFallback } from "../journey/JourneyFallback";
+import { Debug3DOverlay } from "./Debug3DOverlay";
 
 // The Canvas import (and therefore all of three/@react-three/fiber/drei)
 // must live inside this lazy boundary, not at this module's top level —
@@ -54,6 +55,7 @@ export function ScrollEnvironment() {
       </div>
       <GlassFloor />
       <CaptionOverlay zone={zone} />
+      <Debug3DOverlay />
 
       {/* Real, linearly-ordered content for screen readers and search
           crawlers — the visual experience above is a fixed overlay keyed
