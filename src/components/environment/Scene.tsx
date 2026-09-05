@@ -1106,12 +1106,12 @@ function SecurityScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
     // RESULT (a single token rides back out) — timed to this zone's own
     // local progress, one full cycle, not ambient.
     const t = localProgress(progressRef.current, "security");
-    const gateFlash = Math.max(0, 1 - Math.abs(t - 0.2) / 0.12);
-    const vaultFlash = Math.max(0, 1 - Math.abs(t - 0.45) / 0.15);
+    const gateFlash = Math.max(0, 1 - Math.abs(t - 0.15) / 0.12);
+    const vaultFlash = Math.max(0, 1 - Math.abs(t - 0.3) / 0.15);
     if (gateMatRef.current) gateMatRef.current.emissiveIntensity = 0.5 + gateFlash * 0.9;
     if (vaultMatRef.current) vaultMatRef.current.emissiveIntensity = 0.35 + vaultFlash * 0.8;
 
-    const returnT = Math.max(0, Math.min(1, (t - 0.45) / 0.35));
+    const returnT = Math.max(0, Math.min(1, (t - 0.3) / 0.3));
     if (tokenRef.current) {
       tokenRef.current.position.x = THREE.MathUtils.lerp(0, -3.2, smoothstep(returnT));
       const appear = Math.min(1, returnT * 4) * (1 - smoothstep((returnT - 0.85) / 0.15));
@@ -1120,12 +1120,14 @@ function SecurityScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
     }
 
     // Measured with ?debug3d=1: recording the moving token's own position
-    // put the beat right next to this zone's camera-crossover point (the
-    // token has barely left the vault at its most interesting moment),
-    // making the reading fragile. The vault itself sits at this group's
-    // local x=0 — dead center — so its world position stays reliably
-    // in-fov for as long as it's in front of the camera at all. Using
-    // that instead, timed to the vault's own flash peak, fixed it.
+    // put the beat right at this zone's camera-crossover point. Even
+    // after switching to the vault's dead-center x=0, a first attempt at
+    // peak 0.45 still failed — at that point the camera is close enough
+    // that even the bike-rider's ~1.5-unit eye height above the vault
+    // (y=0) alone produces a steep angle. Moving the whole request/
+    // response cycle earlier (peak 0.3, while the camera is still far
+    // enough back that the same height gap reads as a shallow angle)
+    // fixed it.
     if (DEBUG_3D) {
       debugScratch.set(0, 0, Z.security + SECURITY_Z_OFFSET);
       recordBeat("securityKeyVault", debugScratch, t);
@@ -1210,11 +1212,11 @@ function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     if (topicMatRef.current) topicMatRef.current.emissiveIntensity = 0.35 + fanoutPulse * 0.9;
 
     // dead letters accumulate one at a time — first one, two, three, then
-    // more — through the front third of the zone, not solved here, just
+    // more — through the very front of the zone, not solved here, just
     // left visible
     if (dlqRef.current) {
       for (let i = 0; i < SERVICEBUS_DLQ_COUNT; i++) {
-        const arriveAt = 0.1 + (i / SERVICEBUS_DLQ_COUNT) * 0.18;
+        const arriveAt = 0.02 + (i / SERVICEBUS_DLQ_COUNT) * 0.13;
         const grown = smoothstep((t - arriveAt) / 0.06);
         dummy.position.copy(dlqSeeds[i]);
         dummy.scale.setScalar(Math.max(0.001, grown));
