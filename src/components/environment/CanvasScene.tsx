@@ -1,25 +1,19 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Canvas, type RootState } from "@react-three/fiber";
+import { Canvas, useFrame, type RootState } from "@react-three/fiber";
 import * as THREE from "three";
 import { Scene } from "./Scene";
 import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
 
-/**
- * Bundles the Canvas together with Scene so the entire Three.js/R3F/drei
- * runtime stays inside one lazily-loaded chunk — importing `Canvas` at the
- * ScrollEnvironment level (which is mounted eagerly) would otherwise pull
- * all of it into the main bundle regardless of whether Scene itself is
- * lazy.
- *
- * R3F's own auto-sizing (measuring its wrapper div via a ResizeObserver
- * and calling gl.setSize accordingly) was silently not running in the
- * production build — the canvas element never received a width/height at
- * all, staying at the browser's 300x150 default, so nothing ever
- * rendered anywhere visible despite a perfectly live WebGL context.
- * Forcing an explicit size on creation and on window resize sidesteps
- * whatever's wrong in that pipeline — this is plain Three.js
- * (renderer.setSize), not a workaround specific to R3F internals.
- */
+// TEMP-DEBUG: exposes frame-loop liveness and a manual render trigger on
+// `window` for diagnosis from the browser console.
+function FrameCounter() {
+  useFrame(() => {
+    const w = window as unknown as { __frameCount?: number };
+    w.__frameCount = (w.__frameCount ?? 0) + 1;
+  });
+  return null;
+}
+
 export function CanvasScene({
   progressRef,
   reducedMotion,
@@ -43,6 +37,20 @@ export function CanvasScene({
     (state: RootState) => {
       stateRef.current = state;
       applySize();
+
+      const w = window as unknown as {
+        __r3fState?: RootState;
+        __manualRender?: () => { rendered: boolean; error?: string };
+      };
+      w.__r3fState = state;
+      w.__manualRender = () => {
+        try {
+          state.gl.render(state.scene, state.camera);
+          return { rendered: true };
+        } catch (e) {
+          return { rendered: false, error: String(e) };
+        }
+      };
     },
     [applySize]
   );
@@ -55,10 +63,12 @@ export function CanvasScene({
   return (
     <Canvas
       onCreated={handleCreated}
+      frameloop="always"
       dpr={[1, 1.5]}
       camera={{ position: [0, 0.6, 8], fov: 50 }}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
     >
+      <FrameCounter />
       <Scene progressRef={progressRef} reducedMotion={reducedMotion} />
     </Canvas>
   );
