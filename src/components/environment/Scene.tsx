@@ -16,8 +16,8 @@ const SLATE = "#5b607a";
 
 function ForegroundGlass({ camGroupRef }: { camGroupRef: RefObject<THREE.Group | null> }) {
   const edgeGeo = useMemo(() => {
-    const w = 6;
-    const h = 3.4;
+    const w = 2.6;
+    const h = 1.5;
     const pts: THREE.Vector3Tuple[] = [
       [-w / 2, -h / 2, 0], [w / 2, -h / 2, 0],
       [w / 2, -h / 2, 0], [w / 2, h / 2, 0],
@@ -32,7 +32,7 @@ function ForegroundGlass({ camGroupRef }: { camGroupRef: RefObject<THREE.Group |
   return (
     <group ref={camGroupRef}>
       <mesh rotation={[0.08, 0, 0]}>
-        <planeGeometry args={[6, 3.4]} />
+        <planeGeometry args={[2.6, 1.5]} />
         <meshPhysicalMaterial color="#dbeeff" transparent opacity={0.09} roughness={0.06} metalness={0.05} clearcoat={1} clearcoatRoughness={0.08} side={THREE.DoubleSide} />
       </mesh>
       <lineSegments geometry={edgeGeo} rotation={[0.08, 0, 0]}>
@@ -55,23 +55,28 @@ function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassR
     const baseX = pointer.x * 0.6;
     const baseY = 1.4 + pointer.y * 0.25;
 
-    // Reveal-zone modifier: blend the camera up and back so it looks down
-    // the whole corridor at once, then blend back to the normal path.
+    // Reveal-zone modifier: crane the camera up and pivot the look target
+    // from "ahead" to "behind" — the visitor has just built everything in
+    // the corridor they came from, so the reveal looks back down it rather
+    // than continuing to look into the still-empty road ahead (which only
+    // holds text zones).
     const targetX = baseX;
-    const targetY = baseY + reveal * 13;
+    const targetY = baseY + reveal * 22;
     const lookAheadBase = 14;
-    const lookAhead = lookAheadBase + reveal * 55;
+    const lookBehindDistance = 70;
+    const lookZOffset = THREE.MathUtils.lerp(-lookAheadBase, lookBehindDistance, reveal);
+    const lookY = -0.5 - reveal * 10;
 
     camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 5, delta);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3, delta);
     camera.position.z = THREE.MathUtils.damp(camera.position.z, targetZ, 3.2, delta);
-    camera.lookAt(targetX * 0.4, -0.5 - reveal * 6, targetZ - lookAhead);
+    camera.lookAt(targetX * 0.4, lookY, targetZ + lookZOffset);
 
     if (lightsRef.current) lightsRef.current.position.copy(camera.position);
 
     if (glassRef.current) {
       const glassOpacityScale = 1 - reveal;
-      glassRef.current.position.set(camera.position.x * 0.9, camera.position.y - 0.35, camera.position.z - 3.2);
+      glassRef.current.position.set(camera.position.x * 0.9, camera.position.y - 0.2, camera.position.z - 5);
       glassRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.08) * 0.04;
       glassRef.current.scale.setScalar(Math.max(0.001, glassOpacityScale));
     }
