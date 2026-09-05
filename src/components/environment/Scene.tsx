@@ -388,15 +388,15 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
     // Scale the cluster out (a 4th node fades in) as the visitor moves
     // through this zone — AKS node-pool scaling, made physical rather
-    // than described. Measured with ?debug3d=1: with a -6 local z offset
-    // and 0.32 completion, this node was technically in front of the
-    // camera but at 67deg off-axis (outside the FOV) — its x=5.6 lateral
-    // offset is far enough out that -6 of depth wasn't enough to bring
-    // the viewing angle down. Pushed to -9 (pass-point local progress
-    // 0.75) with completion at 0.5, giving a much shallower angle at the
-    // moment it matters.
+    // than described. Measured with ?debug3d=1: even with -9 local z
+    // depth, completing at 0.5 landed inside the Kubernetes->AKS reveal
+    // camera bump's ramp window (that flourish starts 0.05 before the
+    // AKS boundary, which falls at kubernetes-zone-local 0.44) - the
+    // camera rising/pulling back for that reveal is what pushed this
+    // beat off-fov, not its own position. Completing by 0.3 lands well
+    // before the reveal bump engages.
     const t = localProgress(progressRef.current, "kubernetes");
-    const scaleIn = Math.max(0, Math.min(1, (t - 0.15) / 0.35));
+    const scaleIn = Math.max(0, Math.min(1, (t - 0.05) / 0.25));
     if (scaleNodeRef.current) scaleNodeRef.current.scale.setScalar(scaleIn);
     if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
 
@@ -835,11 +835,7 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       if (DEBUG_3D) {
         reportRef.current.updateMatrixWorld(true);
         recordBeat("automationReport", reportRef.current.getWorldPosition(automationDebugScratch), t);
-        console.warn("[debug3d-temp] recorded automationReport", t, beatSamples.automationReport);
       }
-    } else if (DEBUG_3D) {
-      // TEMP: diagnosing why automationReport never appears in the overlay
-      console.warn("[debug3d-temp] reportRef.current is null", t);
     }
   });
 
@@ -864,7 +860,7 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       </mesh>
 
       {/* report — a small resolved card, the structured output */}
-      <group ref={reportRef} position={[5.1, 0.1, -2]} scale={0.001}>
+      <group ref={reportRef} position={[5.1, 0.1, -6]} scale={0.001}>
         <mesh>
           <planeGeometry args={[1.3, 0.9]} />
           <meshPhysicalMaterial color="#0d1420" transparent opacity={0.85} clearcoat={0.6} side={THREE.DoubleSide} />
