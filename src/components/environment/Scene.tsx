@@ -938,16 +938,27 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
 // group 5 units deeper moves the real pass-point out to local progress
 // 0.5, so the traffic split is in front of the camera for the front
 // half of the zone instead of almost none of it. The new load-balancer
-// and private-endpoint beats share this same anchor and were tuned
-// against it the same way.
+// beat shares this same anchor and was tuned against it the same way.
+//
+// The private-endpoint tunnel needed a second fix beyond that shared
+// offset: this zone's own forward-visibility window shrinks fast (the
+// camera's z-rate means anything past ~4 units off-axis is only in-fov
+// very early in the zone, before the crossover point where the camera
+// draws level with the group and everything swings to the side then
+// behind). Measured with ?debug3d=1: at its first placement (avg x
+// 4.25, peak at local progress 0.55) it read BEHIND/off-fov — the
+// crossover for this group's anchor falls around local progress 0.5,
+// so 0.55 was already past it. Pulling the tunnel closer in (avg x 3.4)
+// and moving its own peak earlier (0.08, while the camera is still far
+// enough back for the angle to stay under the FOV limit) fixed it.
 const NETWORK_Z_OFFSET = -5;
 const NETWORK_LB_X = -0.9;
 const NETWORK_LB_BRANCH_X = -0.2;
 const NETWORK_LB_RECONVERGE_X = 1.05;
 const NETWORK_LB_BRANCH_Y = [0.4, 0, -0.4];
-const NETWORK_TUNNEL_START_X = 3.1;
-const NETWORK_TUNNEL_END_X = 5.4;
-const NETWORK_SERVICE_X = 6.3;
+const NETWORK_TUNNEL_START_X = 2.6;
+const NETWORK_TUNNEL_END_X = 4.2;
+const NETWORK_SERVICE_X = 4.8;
 
 function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -996,8 +1007,8 @@ function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgr
       {/* VNet — a territory, not a logo. Large enough to visibly contain
           everything else in this zone, styled like the Azure envelope
           from Stages 1-2 so it reads as the same world. */}
-      <mesh position={[1.5, 0, 0]}>
-        <boxGeometry args={[11.4, 3, 5]} />
+      <mesh position={[1, 0, 0]}>
+        <boxGeometry args={[9, 3, 5]} />
         <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.2} />
       </mesh>
 
@@ -1007,8 +1018,8 @@ function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgr
         <meshStandardMaterial color={CYAN} wireframe transparent opacity={0.32} />
       </mesh>
       {/* subnet B — private services side, past the gate */}
-      <mesh position={[4.9, 0, 0]}>
-        <boxGeometry args={[3.8, 1.7, 2.6]} />
+      <mesh position={[3.7, 0, 0]}>
+        <boxGeometry args={[3.2, 1.7, 2.6]} />
         <meshStandardMaterial color={VIOLET} wireframe transparent opacity={0.32} />
       </mesh>
 
@@ -1108,8 +1119,16 @@ function SecurityScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
       tokenRef.current.updateMatrixWorld(true);
     }
 
-    if (DEBUG_3D && tokenRef.current) {
-      recordBeat("securityKeyVault", tokenRef.current.getWorldPosition(debugScratch), t);
+    // Measured with ?debug3d=1: recording the moving token's own position
+    // put the beat right next to this zone's camera-crossover point (the
+    // token has barely left the vault at its most interesting moment),
+    // making the reading fragile. The vault itself sits at this group's
+    // local x=0 — dead center — so its world position stays reliably
+    // in-fov for as long as it's in front of the camera at all. Using
+    // that instead, timed to the vault's own flash peak, fixed it.
+    if (DEBUG_3D) {
+      debugScratch.set(0, 0, Z.security + SECURITY_Z_OFFSET);
+      recordBeat("securityKeyVault", debugScratch, t);
     }
   });
 
@@ -1154,8 +1173,14 @@ function SecurityScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
 // Left unsolved here on purpose.
 
 // Same anchor pattern as Network/Security — pushed deeper so the
-// fan-out and dead-letter beats play out in front of the camera. Tuned
-// with ?debug3d=1.
+// fan-out and dead-letter beats play out in front of the camera. This
+// zone's crossover (where the camera draws level with the group and
+// everything swings behind) falls around local progress 0.45 — measured
+// with ?debug3d=1, the dead-letter area's first accumulation schedule
+// (arriving between local 0.5 and 0.9) never had a chance to be seen:
+// it only started existing after the camera had already passed it.
+// Pulling the whole accumulation earlier (0.1–0.28) and closer to
+// center fixed it.
 const SERVICEBUS_Z_OFFSET = -5;
 const SERVICEBUS_SUB_Y = [0.7, 0, -0.7];
 const SERVICEBUS_DLQ_COUNT = 6;
@@ -1171,7 +1196,7 @@ function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       Array.from({ length: SERVICEBUS_DLQ_COUNT }, (_, i) => {
         const seed = i * 7.233;
         const rand = (n: number) => Math.abs(Math.sin(seed + n) * 12543.233) % 1;
-        return new THREE.Vector3(1.2 + rand(1) * 0.9, -1.7 + rand(2) * 0.7, -0.7 + rand(3) * 0.7);
+        return new THREE.Vector3(0.4 + rand(1) * 0.6, -0.4 + rand(2) * 0.5, -0.6 + rand(3) * 0.7);
       }),
     []
   );
@@ -1184,11 +1209,12 @@ function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     const fanoutPulse = Math.max(0, 1 - Math.abs(t - 0.22) / 0.1);
     if (topicMatRef.current) topicMatRef.current.emissiveIntensity = 0.35 + fanoutPulse * 0.9;
 
-    // dead letters accumulate one at a time through the back half of the
-    // zone — not solved here, just left visible
+    // dead letters accumulate one at a time — first one, two, three, then
+    // more — through the front third of the zone, not solved here, just
+    // left visible
     if (dlqRef.current) {
       for (let i = 0; i < SERVICEBUS_DLQ_COUNT; i++) {
-        const arriveAt = 0.5 + (i / SERVICEBUS_DLQ_COUNT) * 0.4;
+        const arriveAt = 0.1 + (i / SERVICEBUS_DLQ_COUNT) * 0.18;
         const grown = smoothstep((t - arriveAt) / 0.06);
         dummy.position.copy(dlqSeeds[i]);
         dummy.scale.setScalar(Math.max(0.001, grown));
@@ -1201,7 +1227,7 @@ function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     if (DEBUG_3D) {
       topicScratch.set(-0.4, 0, Z.servicebus + SERVICEBUS_Z_OFFSET);
       recordBeat("serviceBusFanout", topicScratch, t);
-      dlqScratch.set(1.6, -1.4, Z.servicebus + SERVICEBUS_Z_OFFSET);
+      dlqScratch.set(0.7, -0.65, Z.servicebus + SERVICEBUS_Z_OFFSET);
       recordBeat("serviceBusDeadLetter", dlqScratch, t);
     }
   });
@@ -1263,7 +1289,7 @@ function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
         <FlowPath key={y} points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, y, 0], [2.7, y, 0]]} count={4} speed={0.13} offset={i * 0.3} color={CYAN} size={0.045} reducedMotion={reducedMotion} />
       ))}
       {/* a slower, diverted stream — the messages that don't make it through cleanly */}
-      <FlowPath points={[[-0.4, 0, 0], [0.6, -1.1, -0.3], [1.6, -1.4, -0.4]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
+      <FlowPath points={[[-0.4, 0, 0], [0.2, -0.5, -0.3], [0.7, -0.65, -0.4]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
     </group>
   );
 }

@@ -86,10 +86,10 @@ export const sceneCaptions: SceneCaption[] = [
     line: "Not everything happens synchronously. Some messages don't make it through cleanly.",
     beats: [
       { at: 0, heading: "Messaging", line: "Not every system should wait for the other side." },
-      { at: 0.12, heading: "Messaging", line: "Sometimes we just send a message." },
-      { at: 0.22, heading: "Topic", line: "One event can reach many consumers." },
-      { at: 0.5, heading: "Dead Letters", line: "And sometimes messages fail." },
-      { at: 0.75, heading: "Dead Letters", line: "That's when the dead letters start piling up." },
+      { at: 0.08, heading: "Messaging", line: "Sometimes we just send a message." },
+      { at: 0.18, heading: "Topic", line: "One event can reach many consumers." },
+      { at: 0.26, heading: "Dead Letters", line: "And sometimes messages fail." },
+      { at: 0.34, heading: "Dead Letters", line: "That's when the dead letters start piling up." },
     ],
   },
   {
