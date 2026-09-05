@@ -21,13 +21,29 @@ export function JourneyFallback({ visuallyHidden = false }: { visuallyHidden?: b
         <p className="mt-6 font-mono text-xs tracking-widest text-ink-faint">{profile.employers.join("  ·  ")}</p>
       </section>
 
-      {sceneCaptions.map((scene) => (
-        <section key={scene.id} className="py-16">
-          <p className="font-mono text-xs tracking-widest text-cyan uppercase">{scene.eyebrow}</p>
-          <h2 className="mt-2 text-3xl font-semibold text-ink">{scene.heading}</h2>
-          <p className="mt-2 text-ink-dim">{scene.line}</p>
-        </section>
-      ))}
+      {sceneCaptions.map((scene) =>
+        scene.beats ? (
+          <section key={scene.id} className="py-16">
+            <p className="font-mono text-xs tracking-widest text-cyan uppercase">{scene.eyebrow}</p>
+            <div className="mt-2 space-y-4">
+              {scene.beats.map((beat, i) => (
+                <div key={i}>
+                  {(i === 0 || beat.heading !== scene.beats![i - 1].heading) && (
+                    <h2 className="text-2xl font-semibold text-ink">{beat.heading ?? scene.heading}</h2>
+                  )}
+                  <p className="mt-1 text-ink-dim">{beat.line}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section key={scene.id} className="py-16">
+            <p className="font-mono text-xs tracking-widest text-cyan uppercase">{scene.eyebrow}</p>
+            <h2 className="mt-2 text-3xl font-semibold text-ink">{scene.heading}</h2>
+            <p className="mt-2 text-ink-dim">{scene.line}</p>
+          </section>
+        )
+      )}
 
       <section className="py-16 text-center">
         <p className="font-mono text-xs tracking-widest text-cyan uppercase">That's the stack</p>

@@ -2,17 +2,26 @@ import { AnimatePresence, motion } from "framer-motion";
 import { profile, recommendations, recognitions, projects } from "../../data/profile";
 import { sceneCaptions } from "../../data/journey";
 import { useOpeningStage } from "../../hooks/useOpeningStage";
+import { useZoneStage } from "../../hooks/useZoneStage";
 import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
 
 const textShadow = "0 2px 24px rgba(0,0,0,0.9), 0 1px 4px rgba(0,0,0,0.8)";
 
+// Pipeline is the first zone with a staged beat sequence (Git -> CI/CD ->
+// Terraform -> Azure, all one continuous zone) rather than a single
+// static caption. Thresholds come from the data itself so the two stay
+// in sync; extracted once at module scope for a stable array reference.
+const PIPELINE_BEATS = sceneCaptions.find((s) => s.id === "pipeline")?.beats ?? [];
+const PIPELINE_BEAT_THRESHOLDS = PIPELINE_BEATS.map((b) => b.at);
+
 export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
   const openingStage = useOpeningStage(progressRef);
-  // The opening ritual (parked bike -> "hop on" -> engine start -> name)
-  // has its own finer-grained key than the zone itself, so each line gets
-  // its own enter/exit rather than the whole zone-0 block just sitting
-  // there while the stage changes underneath it.
-  const key = zone === 0 ? `opening-${openingStage}` : zone;
+  const pipelineStage = useZoneStage(progressRef, "pipeline", PIPELINE_BEAT_THRESHOLDS);
+  // The opening ritual and the pipeline's staged beats each have their
+  // own finer-grained key than the zone itself, so every line gets its
+  // own enter/exit rather than the whole zone block just sitting there
+  // while the stage changes underneath it.
+  const key = zone === 0 ? `opening-${openingStage}` : zone === 1 ? `pipeline-${pipelineStage}` : zone;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-10 flex items-end px-6 pb-20 sm:px-10 sm:pb-24 lg:px-16">
@@ -27,7 +36,7 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
           style={{ textShadow }}
         >
           {zone === 0 && <OpeningCaption stage={openingStage} />}
-          {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} />}
+          {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} beatStage={zone === 1 ? pipelineStage : undefined} />}
           {zone === 11 && <RevealCaption />}
           {zone === 12 && <ImpactCaption />}
           {zone === 13 && <RecommendationsCaption />}
@@ -66,8 +75,18 @@ function OpeningCaption({ stage }: { stage: number }) {
   );
 }
 
-function SceneCaption({ index }: { index: number }) {
+function SceneCaption({ index, beatStage }: { index: number; beatStage?: number }) {
   const scene = sceneCaptions[index];
+  if (scene.beats && beatStage !== undefined) {
+    const beat = scene.beats[Math.min(beatStage, scene.beats.length - 1)];
+    return (
+      <div className="max-w-md">
+        <p className="font-mono text-xs tracking-widest text-cyan uppercase">{beat.eyebrow ?? scene.eyebrow}</p>
+        <h2 className="mt-2 text-3xl font-semibold text-ink sm:text-4xl">{beat.heading ?? scene.heading}</h2>
+        <p className="mt-2 text-ink-dim">{beat.line}</p>
+      </div>
+    );
+  }
   return (
     <div className="max-w-md">
       <p className="font-mono text-xs tracking-widest text-cyan uppercase">{scene.eyebrow}</p>

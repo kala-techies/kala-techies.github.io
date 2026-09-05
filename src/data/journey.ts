@@ -6,6 +6,12 @@ export type SceneCaption = {
   eyebrow: string;
   heading: string;
   line: string;
+  /** Optional finer-grained sequence within this zone's own local
+   * progress (0-1) — "one sentence, pause, one sentence" instead of one
+   * static block sitting on screen for the whole zone. `at` thresholds
+   * must be ascending starting at 0; falls back to heading/line above
+   * when absent. Driven by useZoneStage, not this array's shape. */
+  beats?: { at: number; eyebrow?: string; heading?: string; line: string }[];
 };
 
 export const sceneCaptions: SceneCaption[] = [
@@ -14,6 +20,15 @@ export const sceneCaptions: SceneCaption[] = [
     eyebrow: "Scene 02",
     heading: "Pipeline",
     line: "Git keeps the code organized. The pipeline takes it from there — build, test, package, deploy.",
+    beats: [
+      { at: 0, heading: "Git", line: "Everything starts with code." },
+      { at: 0.14, heading: "Git", line: "And every change needs a history." },
+      { at: 0.32, heading: "CI/CD", line: "Once the code changes, the pipeline takes over." },
+      { at: 0.48, heading: "CI/CD", line: "Build. Test. Package. Deploy." },
+      { at: 0.62, heading: "Terraform", line: "But software needs somewhere to run." },
+      { at: 0.74, heading: "Terraform", line: "I define the infrastructure. Terraform builds it." },
+      { at: 0.87, heading: "Azure", line: "This is where most of my professional engineering work happens." },
+    ],
   },
   {
     id: "kubernetes",

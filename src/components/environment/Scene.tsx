@@ -487,6 +487,19 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
   const containerRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const debugScratch = useMemo(() => new THREE.Vector3(), []);
+  // Terraform: infrastructure drawing itself into what was, a moment ago,
+  // an empty stretch of the same road — not a separate scene, the camera
+  // never stops moving for this. Each piece is positioned deep enough
+  // (local z beyond -6.6) that its own growth window finishes well
+  // before the camera reaches that depth — same "stay ahead of the
+  // camera" rule proven for every other late-triggering beat this
+  // session, just applied to scenery instead of a single hero object.
+  const tfComputeRef = useRef<THREE.Group>(null);
+  const tfStorageRef = useRef<THREE.Group>(null);
+  const tfNetRef = useRef<THREE.Group>(null);
+  const tfSubnetRef = useRef<THREE.Group>(null);
+  const azureEnvelopeRef = useRef<THREE.Mesh>(null);
+  const azureEnvelopeMatRef = useRef<THREE.MeshStandardMaterial>(null);
 
   const buildFragments = useMemo(
     () =>
@@ -536,12 +549,32 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
         recordBeat("pipelineMultiply", debugScratch, t);
       }
     }
+
+    // Terraform / Azure: a staggered materialize-in, each piece finishing
+    // its own growth before the camera reaches it.
+    const computeGrow = smoothstep((t - 0.45) / 0.13);
+    const storageGrow = smoothstep((t - 0.55) / 0.13);
+    const netGrow = smoothstep((t - 0.65) / 0.13);
+    const subnetGrow = smoothstep((t - 0.72) / 0.13);
+    const azureGrow = smoothstep((t - 0.75) / 0.17);
+
+    if (tfComputeRef.current) tfComputeRef.current.scale.setScalar(Math.max(0.001, computeGrow));
+    if (tfStorageRef.current) tfStorageRef.current.scale.setScalar(Math.max(0.001, storageGrow));
+    if (tfNetRef.current) tfNetRef.current.scale.setScalar(Math.max(0.001, netGrow));
+    if (tfSubnetRef.current) tfSubnetRef.current.scale.setScalar(Math.max(0.001, subnetGrow));
+    if (azureEnvelopeRef.current) azureEnvelopeRef.current.scale.setScalar(Math.max(0.001, azureGrow));
+    if (azureEnvelopeMatRef.current) azureEnvelopeMatRef.current.opacity = azureGrow * 0.26;
   });
 
   return (
     <group position={[0, 0.2, Z.pipeline]}>
       {/* CODE — a thin stream of particles flowing toward the build stage */}
       <FlowPath points={[[0, 0, 5], [0.15, 0.1, 3.6], [0, 0, 2.2]]} count={8} speed={0.35} color={CYAN} size={0.04} reducedMotion={reducedMotion} />
+
+      {/* GIT — two branches converging into the main line before it
+          reaches the build stage. No logo; the merge itself is the idea. */}
+      <FlowPath points={[[-0.85, 0.08, 5.3], [-0.45, 0.08, 4.1], [0, 0.05, 2.6]]} count={4} speed={0.3} color={AZURE} size={0.035} offset={0.15} reducedMotion={reducedMotion} />
+      <FlowPath points={[[0.85, 0.08, 5.3], [0.45, 0.08, 4.1], [0, 0.05, 2.6]]} count={4} speed={0.3} color={VIOLET} size={0.035} offset={0.4} reducedMotion={reducedMotion} />
 
       {/* BUILD — a physical processing chamber the fragments assemble inside,
           not fragments floating in open space */}
@@ -585,6 +618,43 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
 
       {/* DEPLOY — a thin stream continuing toward where the copies land */}
       <FlowPath points={[[0, 0, -0.4], [0, 0, -3], [0, 0, -6]]} count={5} speed={0.22} color={CYAN} size={0.05} offset={0.4} reducedMotion={reducedMotion} />
+
+      {/* TERRAFORM — the deploy stream doesn't land on a pre-existing
+          server; it enters an empty stretch of road, and infrastructure
+          draws itself in around it. */}
+      <group ref={tfComputeRef} position={[-2.4, -0.15, -7]} scale={0.001}>
+        <mesh>
+          <boxGeometry args={[0.7, 0.7, 0.7]} />
+          <meshStandardMaterial color={AZURE} emissive={AZURE} emissiveIntensity={0.35} roughness={0.4} metalness={0.4} />
+        </mesh>
+      </group>
+      <group ref={tfStorageRef} position={[2.3, -0.1, -8.5]} scale={0.001}>
+        <mesh>
+          <cylinderGeometry args={[0.35, 0.4, 0.9, 16]} />
+          <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.3} roughness={0.5} metalness={0.3} />
+        </mesh>
+      </group>
+      <group ref={tfNetRef} position={[0, 0.1, -10]} scale={0.001}>
+        <mesh>
+          <boxGeometry args={[4.4, 1.6, 2.6]} />
+          <meshStandardMaterial color={CYAN} wireframe transparent opacity={0.35} />
+        </mesh>
+      </group>
+      <group ref={tfSubnetRef} position={[-1.3, 0, -11]} scale={0.001}>
+        <mesh>
+          <boxGeometry args={[1.6, 1, 1.2]} />
+          <meshStandardMaterial color={CYAN} wireframe transparent opacity={0.5} />
+        </mesh>
+      </group>
+
+      {/* AZURE — the boundary this infrastructure has been forming
+          inside all along. Positioned deep enough (local z -13) that the
+          camera never reaches it within this zone at all — it stays
+          "just ahead" through the handoff into Kubernetes. */}
+      <mesh ref={azureEnvelopeRef} position={[0, 0.3, -13]} scale={0.001}>
+        <boxGeometry args={[10, 4, 6]} />
+        <meshStandardMaterial ref={azureEnvelopeMatRef} color={AZURE} wireframe transparent opacity={0} />
+      </mesh>
     </group>
   );
 }
