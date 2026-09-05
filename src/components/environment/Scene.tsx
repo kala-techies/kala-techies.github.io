@@ -1948,6 +1948,155 @@ function RecommendationsScene({ progressRef }: { progressRef: ScrollProgressRef 
   );
 }
 
+/* ------------------------- SCENE 15: PERSONAL PROJECTS --------------------- */
+// A side road, not another section. The main road never actually
+// forks — three small, distinct experiments just drift to one side and
+// are passed like the recognition markers before them: optional, quiet,
+// no branching mechanic, nothing to "choose." Order matches profile.ts:
+// OfflineMoM (offline notes), AP EC Voter Search (searchable data),
+// offline AI/RAG (local retrieval experimentation).
+
+// This zone's own camera z-rate is shallow enough (5 units over its
+// whole width) that -9 keeps the crossover past local progress 1
+// entirely, same reasoning as Automation/Recommendations — verified
+// with ?debug3d=1 rather than assumed given how often that assumption
+// has needed correcting elsewhere in this project.
+const WORK_Z_OFFSET = -9;
+const WORK_MARKER_X = [-1.6, 0, 1.6];
+const WORK_WINDOWS: [number, number][] = [
+  [0.3, 0.42],
+  [0.55, 0.65],
+  [0.78, 0.88],
+];
+
+function WorkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const matRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
+  const meshRefs = useRef<(THREE.Object3D | null)[]>([]);
+  const dotsRef = useRef<THREE.InstancedMesh>(null);
+  const haloRef = useRef<THREE.Mesh>(null);
+  const scratch = useMemo(() => new THREE.Vector3(), []);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const beatIds = ["sideRoadProject1", "sideRoadProject2", "sideRoadProject3"] as const;
+
+  const dotSeeds = useMemo(
+    () =>
+      Array.from({ length: 8 }, (_, i) => {
+        const seed = i * 5.171;
+        const rand = (n: number) => Math.abs(Math.sin(seed + n) * 9631.7) % 1;
+        return new THREE.Vector3((rand(1) - 0.5) * 1.1, (rand(2) - 0.5) * 0.7, (rand(3) - 0.5) * 0.5);
+      }),
+    []
+  );
+
+  useFrame((_, delta) => {
+    const t = localProgress(progressRef.current, "work");
+    WORK_WINDOWS.forEach(([start, end], i) => {
+      const mat = matRefs.current[i];
+      if (mat) mat.emissiveIntensity = 0.12 + smoothstep((t - start) / (end - start)) * 0.55;
+    });
+
+    // the search result isolating itself from the rest of the data
+    const searchT = smoothstep(Math.max(0, t - WORK_WINDOWS[1][0]) / 0.13);
+    if (dotsRef.current) {
+      for (let i = 0; i < dotSeeds.length; i++) {
+        const seed = dotSeeds[i];
+        dummy.position.set(seed.x + WORK_MARKER_X[1], seed.y + 0.65, seed.z);
+        const isResult = i === 3;
+        dummy.scale.setScalar(isResult ? 1 + searchT * 1.1 : 1 - searchT * 0.3);
+        dummy.updateMatrix();
+        dotsRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      dotsRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    if (haloRef.current && !reducedMotion) haloRef.current.rotation.y += delta * 0.3;
+
+    if (DEBUG_3D) {
+      meshRefs.current.forEach((m, i) => {
+        if (!m) return;
+        m.updateMatrixWorld(true);
+        recordBeat(beatIds[i], m.getWorldPosition(scratch), t);
+      });
+    }
+  });
+
+  return (
+    <group position={[0, 0.2, Z.work + WORK_Z_OFFSET]}>
+      {/* OfflineMoM — notes settling into structured minutes, stored locally */}
+      <group ref={(el) => { meshRefs.current[0] = el; }} position={[WORK_MARKER_X[0], 0, 0]} rotation={[0, 0.2, 0]}>
+        <mesh position={[0, 0, -0.08]}>
+          <planeGeometry args={[0.8, 1.05]} />
+          <meshStandardMaterial color={SLATE} transparent opacity={0.5} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh>
+          <planeGeometry args={[0.8, 1.05]} />
+          <meshStandardMaterial ref={(el) => { matRefs.current[0] = el; }} color={GREEN} emissive={GREEN} emissiveIntensity={0.12} transparent opacity={0.85} side={THREE.DoubleSide} roughness={0.4} metalness={0.2} />
+        </mesh>
+      </group>
+
+      {/* AP EC Voter Search — a query travels into local data, one result isolates */}
+      <mesh ref={(el) => { meshRefs.current[1] = el; }} position={[WORK_MARKER_X[1], 0, 0]} rotation={[0, 0, 0]}>
+        <planeGeometry args={[0.8, 1.05]} />
+        <meshStandardMaterial ref={(el) => { matRefs.current[1] = el; }} color={AMBER} emissive={AMBER} emissiveIntensity={0.12} transparent opacity={0.85} side={THREE.DoubleSide} roughness={0.4} metalness={0.2} />
+      </mesh>
+      <instancedMesh ref={dotsRef} args={[undefined, undefined, dotSeeds.length]}>
+        <sphereGeometry args={[0.045, 8, 8]} />
+        <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.7} />
+      </instancedMesh>
+
+      {/* Offline AI / RAG — local knowledge, a quiet halo, not a chat UI */}
+      <group ref={(el) => { meshRefs.current[2] = el; }} position={[WORK_MARKER_X[2], 0, 0]} rotation={[0, -0.2, 0]}>
+        <mesh>
+          <planeGeometry args={[0.8, 1.05]} />
+          <meshStandardMaterial ref={(el) => { matRefs.current[2] = el; }} color={VIOLET} emissive={VIOLET} emissiveIntensity={0.12} transparent opacity={0.85} side={THREE.DoubleSide} roughness={0.4} metalness={0.2} />
+        </mesh>
+        <mesh ref={haloRef} position={[0, 0, 0.15]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.22, 0.008, 8, 32]} />
+          <meshBasicMaterial color={VIOLET} transparent opacity={0.5} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+/* --------------------------- SCENE 16: CONNECT ------------------------------ */
+// The quiet ride, then three small markers echoing the real contact
+// links already rendered as accessible HTML in ConnectCaption — this
+// scene is decoration for that DOM content, never a replacement for it.
+
+const CONNECT_Z_OFFSET = -9;
+const CONNECT_MARKER_X = [-1.2, 0, 1.2];
+
+function ConnectScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const matRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
+  const centerRef = useRef<THREE.Mesh>(null);
+  const scratch = useMemo(() => new THREE.Vector3(), []);
+
+  useFrame((_, delta) => {
+    const t = localProgress(progressRef.current, "connect");
+    const reveal = smoothstep((t - 0.55) / 0.15);
+    matRefs.current.forEach((mat) => {
+      if (mat) mat.emissiveIntensity = 0.1 + reveal * 0.5;
+    });
+    if (centerRef.current && !reducedMotion) centerRef.current.rotation.y += delta * 0.15;
+    if (DEBUG_3D && centerRef.current) {
+      centerRef.current.updateMatrixWorld(true);
+      recordBeat("contactReveal", centerRef.current.getWorldPosition(scratch), t);
+    }
+  });
+
+  return (
+    <group position={[0, 0.3, Z.connect + CONNECT_Z_OFFSET]}>
+      {CONNECT_MARKER_X.map((x, i) => (
+        <mesh key={x} ref={i === 1 ? centerRef : undefined} position={[x, 0, 0]}>
+          <icosahedronGeometry args={[0.16, 0]} />
+          <meshStandardMaterial ref={(el) => { matRefs.current[i] = el; }} color="#eaf6ff" emissive={CYAN} emissiveIntensity={0.1} roughness={0.3} metalness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 export function Scene({ progressRef, reducedMotion = false }: { progressRef: ScrollProgressRef; reducedMotion?: boolean }) {
   const glassRef = useRef<THREE.Group>(null);
   const bikeRef = useRef<THREE.Group>(null);
@@ -1989,6 +2138,8 @@ export function Scene({ progressRef, reducedMotion = false }: { progressRef: Scr
       <RevealScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <ImpactScene progressRef={progressRef} />
       <RecommendationsScene progressRef={progressRef} />
+      <WorkScene progressRef={progressRef} reducedMotion={reducedMotion} />
+      <ConnectScene progressRef={progressRef} reducedMotion={reducedMotion} />
 
       <ForegroundGlass camGroupRef={glassRef} />
     </>

@@ -32,6 +32,11 @@ const PRODUCTION_BEAT_THRESHOLDS = beatThresholds("production");
 const REVEAL_THRESHOLDS = [0, 0.25, 0.5, 0.75];
 const IMPACT_THRESHOLDS = [0, 0.6];
 const RECOMMENDATIONS_THRESHOLDS = [0, 0.35, 0.6, 0.85];
+const WORK_THRESHOLDS = [0, 0.15, 0.42, 0.65, 0.88];
+// Stage 0 is silent again, same trick as Reveal — a real quiet stretch
+// before "Thanks for coming along." rather than landing on text
+// immediately at the zone boundary.
+const CONNECT_THRESHOLDS = [0, 0.35, 0.55];
 
 export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
   const openingStage = useOpeningStage(progressRef);
@@ -47,6 +52,8 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
   const revealStage = useZoneStage(progressRef, "reveal", REVEAL_THRESHOLDS);
   const impactStage = useZoneStage(progressRef, "impact", IMPACT_THRESHOLDS);
   const recommendationsStage = useZoneStage(progressRef, "recommendations", RECOMMENDATIONS_THRESHOLDS);
+  const workStage = useZoneStage(progressRef, "work", WORK_THRESHOLDS);
+  const connectStage = useZoneStage(progressRef, "connect", CONNECT_THRESHOLDS);
   const beatStage =
     zone === 1 ? pipelineStage
     : zone === 2 ? kubernetesStage
@@ -60,6 +67,8 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
     : zone === 11 ? revealStage
     : zone === 12 ? impactStage
     : zone === 13 ? recommendationsStage
+    : zone === 14 ? workStage
+    : zone === 15 ? connectStage
     : undefined;
   // The opening ritual and each zone's staged beats have their own
   // finer-grained key than the zone itself, so every line gets its own
@@ -84,8 +93,8 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
           {zone === 11 && <RevealCaption stage={revealStage} />}
           {zone === 12 && <ImpactCaption stage={impactStage} />}
           {zone === 13 && <RecommendationsCaption stage={recommendationsStage} />}
-          {zone === 14 && <WorkCaption />}
-          {zone === 15 && <ConnectCaption />}
+          {zone === 14 && <WorkCaption stage={workStage} />}
+          {zone === 15 && <ConnectCaption stage={connectStage} />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -198,34 +207,57 @@ function RecommendationsCaption({ stage }: { stage: number }) {
   );
 }
 
-function WorkCaption() {
+// The side road, in words: two short lines of setup, then one line per
+// experiment as the rider actually reaches it — not a projects list
+// dumped on screen at once. Order matches the marker geometry and
+// profile.ts: OfflineMoM, AP EC Voter Search, offline AI/RAG.
+const WORK_INTRO = ["The work doesn't stop there.", "I like building things outside the road too."];
+const WORK_PROJECT_LINES = ["Offline tools.", "Searchable data.", "Experiments with local AI."];
+
+function WorkCaption({ stage }: { stage: number }) {
+  if (stage < WORK_INTRO.length) {
+    return (
+      <div className="mx-auto max-w-lg text-center">
+        <h2 className="text-2xl font-semibold text-ink sm:text-3xl">{WORK_INTRO[stage]}</h2>
+      </div>
+    );
+  }
+  const p = projects[Math.min(stage - WORK_INTRO.length, projects.length - 1)];
   return (
     <div className="max-w-md">
-      <p className="font-mono text-xs tracking-widest text-violet uppercase">When I'm not on the clock</p>
-      <div className="mt-3 space-y-2">
-        {projects.map((p) => (
-          <p key={p.name} className="text-ink-dim">
-            <span className="text-ink">{p.name}</span> — {p.tagline}
-          </p>
-        ))}
-      </div>
+      <p className="font-mono text-xs tracking-widest text-violet uppercase">{p.name}</p>
+      <h2 className="mt-2 text-2xl font-semibold text-ink sm:text-3xl">{WORK_PROJECT_LINES[stage - WORK_INTRO.length]}</h2>
+      <p className="mt-1 text-sm text-ink-faint">{p.tagline}</p>
     </div>
   );
 }
 
-function ConnectCaption() {
+// Stage 0: silence — the final ride, almost no text, same trick as
+// Reveal's own opening beat. Stage 1: the thanks. Stage 2: the real
+// contact links, as actual anchor tags (keyboard-focusable, screen-
+// reader-readable) — this block is the accessible interaction, not the
+// small 3D markers behind it, which are decoration only.
+function ConnectCaption({ stage }: { stage: number }) {
+  if (stage === 0) return null;
+  if (stage === 1) {
+    return (
+      <div className="mx-auto max-w-md text-center">
+        <p className="text-xl font-medium text-ink">Thanks for coming along.</p>
+      </div>
+    );
+  }
   return (
     <div className="pointer-events-auto mx-auto max-w-md text-center">
       <p className="text-xl font-medium text-ink">Thanks for coming along.</p>
       <p className="mt-2 text-ink-dim">If you'd like to build something together, let's talk.</p>
       <div className="mt-5 flex flex-wrap justify-center gap-x-6 gap-y-2 text-lg">
-        <a href={profile.linkedin} target="_blank" rel="noreferrer" className="text-ink transition-colors hover:text-cyan">
+        <a href={profile.linkedin} target="_blank" rel="noreferrer" className="rounded text-ink transition-colors hover:text-cyan focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan">
           LinkedIn
         </a>
-        <a href={profile.github} target="_blank" rel="noreferrer" className="text-ink transition-colors hover:text-cyan">
+        <a href={profile.github} target="_blank" rel="noreferrer" className="rounded text-ink transition-colors hover:text-cyan focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan">
           GitHub
         </a>
-        <a href={`mailto:${profile.email}`} className="text-ink transition-colors hover:text-cyan">
+        <a href={`mailto:${profile.email}`} className="rounded text-ink transition-colors hover:text-cyan focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan">
           Email
         </a>
       </div>

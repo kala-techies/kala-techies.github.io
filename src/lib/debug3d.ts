@@ -41,7 +41,11 @@ export type BeatId =
   | "recommendationMarker1"
   | "recommendationMarker2"
   | "recommendationMarker3"
-  | "identityReveal";
+  | "identityReveal"
+  | "sideRoadProject1"
+  | "sideRoadProject2"
+  | "sideRoadProject3"
+  | "contactReveal";
 
 export interface BeatMeta {
   label: string;
@@ -83,6 +87,10 @@ export const BEAT_META: Record<BeatId, BeatMeta> = {
   recommendationMarker2: { label: "Recommendation marker 2 (Deiva)", zone: "recommendations", triggerProgress: 0.35, peakProgress: 0.45 },
   recommendationMarker3: { label: "Recommendation marker 3 (placeholder)", zone: "recommendations", triggerProgress: 0.6, peakProgress: 0.7 },
   identityReveal: { label: "Identity reveal (Kala)", zone: "recommendations", triggerProgress: 0.85, peakProgress: 0.92 },
+  sideRoadProject1: { label: "Side road: OfflineMoM", zone: "work", triggerProgress: 0.3, peakProgress: 0.42 },
+  sideRoadProject2: { label: "Side road: AP EC Voter Search", zone: "work", triggerProgress: 0.55, peakProgress: 0.65 },
+  sideRoadProject3: { label: "Side road: offline AI / RAG", zone: "work", triggerProgress: 0.78, peakProgress: 0.88 },
+  contactReveal: { label: "Contact markers reveal", zone: "connect", triggerProgress: 0.55, peakProgress: 0.7 },
 };
 
 export const BEAT_ORDER: BeatId[] = [
@@ -111,6 +119,10 @@ export const BEAT_ORDER: BeatId[] = [
   "recommendationMarker2",
   "recommendationMarker3",
   "identityReveal",
+  "sideRoadProject1",
+  "sideRoadProject2",
+  "sideRoadProject3",
+  "contactReveal",
 ];
 
 interface BeatSample {
