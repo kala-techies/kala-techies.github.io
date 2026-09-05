@@ -18,12 +18,12 @@ export function CaptionOverlay({ zone }: { zone: number }) {
           style={{ textShadow }}
         >
           {zone === 0 && <IdentityCaption />}
-          {zone >= 1 && zone <= 9 && <SceneCaption index={zone - 1} />}
-          {zone === 10 && <RevealCaption />}
-          {zone === 11 && <ImpactCaption />}
-          {zone === 12 && <RecommendationsCaption />}
-          {zone === 13 && <WorkCaption />}
-          {zone === 14 && <ConnectCaption />}
+          {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} />}
+          {zone === 11 && <RevealCaption />}
+          {zone === 12 && <ImpactCaption />}
+          {zone === 13 && <RecommendationsCaption />}
+          {zone === 14 && <WorkCaption />}
+          {zone === 15 && <ConnectCaption />}
         </motion.div>
       </AnimatePresence>
     </div>

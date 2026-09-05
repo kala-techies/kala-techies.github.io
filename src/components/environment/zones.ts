@@ -1,15 +1,16 @@
-// The scroll journey: 15 zones, each a distinct physical space the camera
-// travels through. Boundaries are fractions of total scroll (16 values →
-// 15 zones); Z values are the camera's world-space depth at each boundary.
+// The scroll journey: 16 zones, each a distinct physical space the camera
+// travels through. Boundaries are fractions of total scroll (17 values →
+// 16 zones); Z values are the camera's world-space depth at each boundary.
 export const ZONE_IDS = [
   "identity",
   "pipeline",
-  "cloud",
   "kubernetes",
+  "aks",
   "network",
   "security",
-  "automation",
   "servicebus",
+  "automation",
+  "monitoring",
   "production",
   "dr",
   "reveal",
@@ -22,10 +23,10 @@ export const ZONE_IDS = [
 export type ZoneId = (typeof ZONE_IDS)[number];
 
 export const ZONE_BOUNDARIES = [
-  0, 0.05, 0.12, 0.23, 0.31, 0.38, 0.47, 0.54, 0.63, 0.71, 0.76, 0.82, 0.89, 0.94, 0.97, 1.0,
+  0, 0.05, 0.14, 0.23, 0.3, 0.37, 0.43, 0.5, 0.59, 0.63, 0.71, 0.77, 0.83, 0.89, 0.94, 0.97, 1.0,
 ];
 export const ZONE_Z = [
-  12, 6, -2, -12, -22, -30, -38, -46, -54, -64, -76, -84, -90, -96, -100, -104,
+  12, 6, -6, -18, -28, -38, -47, -58, -70, -76, -88, -98, -108, -117, -125, -130, -135,
 ];
 
 export const REVEAL_ZONE_INDEX = ZONE_IDS.indexOf("reveal");
@@ -98,16 +99,17 @@ export function revealBlend(progress: number, buffer = 0.03): number {
 // camera is looking roughly at it mid-zone).
 export const Z = {
   pipeline: ZONE_Z[1],
-  cloud: ZONE_Z[2],
-  kubernetes: ZONE_Z[3],
+  kubernetes: ZONE_Z[2],
+  aks: ZONE_Z[3],
   network: ZONE_Z[4],
   security: ZONE_Z[5],
-  automation: ZONE_Z[6],
-  servicebus: ZONE_Z[7],
-  production: ZONE_Z[8],
-  dr: ZONE_Z[9],
-  impact: ZONE_Z[11],
-  recommendations: ZONE_Z[12],
-  work: ZONE_Z[13],
-  connect: ZONE_Z[14],
+  servicebus: ZONE_Z[6],
+  automation: ZONE_Z[7],
+  monitoring: ZONE_Z[8],
+  production: ZONE_Z[9],
+  dr: ZONE_Z[10],
+  impact: ZONE_Z[12],
+  recommendations: ZONE_Z[13],
+  work: ZONE_Z[14],
+  connect: ZONE_Z[15],
 };

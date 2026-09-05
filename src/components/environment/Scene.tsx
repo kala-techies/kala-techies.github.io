@@ -1,4 +1,4 @@
-import { useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Grid } from "@react-three/drei";
 import * as THREE from "three";
@@ -19,6 +19,12 @@ const VIOLET = "#8b7cf6";
 const AMBER = "#f5b642";
 const RED = "#e05a5a";
 const SLATE = "#5b607a";
+const GREEN = "#5fe0a0";
+
+function smoothstep(t: number): number {
+  const c = Math.min(1, Math.max(0, t));
+  return c * c * (3 - 2 * c);
+}
 
 /* -------------------------------- SHARED -------------------------------- */
 
@@ -143,25 +149,20 @@ function FlowPath({
   );
 }
 
-function SlowSpin({ children, speed = 0.05, z, reducedMotion = false }: { children: ReactNode; speed?: number; z: number; reducedMotion?: boolean }) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame((_, delta) => {
-    if (ref.current && !reducedMotion) ref.current.rotation.y += delta * speed;
-  });
-  return (
-    <group ref={ref} position={[0, 0, z]}>
-      {children}
-    </group>
-  );
-}
-
 /* ---------------------------- SCENE 02: PIPELINE ------------------------- */
+// CODE -> BUILD -> CONTAINER -> REGISTRY -> MULTIPLY. The multiply beat, in
+// the back third of the zone, splits the single container into three and
+// carries them toward the exact x-positions Kubernetes' first three nodes
+// occupy — so crossing into the next zone reads as the containers arriving
+// and becoming workloads, not one diorama ending and another beginning.
 
-function PipelineScene({ reducedMotion }: { reducedMotion: boolean }) {
+const HANDOFF_NODE_X = [-3.2, 0, 3.2];
+
+function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const buildRef = useRef<THREE.Group>(null);
-  useFrame((_, delta) => {
-    if (buildRef.current && !reducedMotion) buildRef.current.rotation.y += delta * 0.4;
-  });
+  const multiplyRef = useRef<THREE.InstancedMesh>(null);
+  const containerRef = useRef<THREE.Mesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
 
   const buildFragments = useMemo(
     () =>
@@ -171,6 +172,32 @@ function PipelineScene({ reducedMotion }: { reducedMotion: boolean }) {
       }),
     []
   );
+
+  useFrame((_, delta) => {
+    if (buildRef.current && !reducedMotion) buildRef.current.rotation.y += delta * 0.4;
+
+    const t = localProgress(progressRef.current, "pipeline");
+    const eased = smoothstep((t - 0.62) / 0.38);
+
+    if (containerRef.current) {
+      // the original container fades as its copies take over the frame
+      containerRef.current.scale.setScalar(1 - eased * 0.35);
+    }
+
+    if (multiplyRef.current) {
+      for (let i = 0; i < HANDOFF_NODE_X.length; i++) {
+        dummy.position.set(
+          THREE.MathUtils.lerp(0, HANDOFF_NODE_X[i], eased),
+          THREE.MathUtils.lerp(0, -0.1, eased),
+          THREE.MathUtils.lerp(-0.3, -6.2, eased)
+        );
+        dummy.scale.setScalar(THREE.MathUtils.lerp(0.001, 1, Math.min(1, eased * 1.7)));
+        dummy.updateMatrix();
+        multiplyRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      multiplyRef.current.instanceMatrix.needsUpdate = true;
+    }
+  });
 
   return (
     <group position={[0, 0.2, Z.pipeline]}>
@@ -188,7 +215,7 @@ function PipelineScene({ reducedMotion }: { reducedMotion: boolean }) {
       </group>
 
       {/* CONTAINER — a solid container box, the fragments' resolved form */}
-      <mesh position={[0, 0, 0]}>
+      <mesh ref={containerRef} position={[0, 0, 0]}>
         <boxGeometry args={[1.3, 0.7, 0.7]} />
         <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.4} roughness={0.4} metalness={0.3} />
       </mesh>
@@ -206,60 +233,37 @@ function PipelineScene({ reducedMotion }: { reducedMotion: boolean }) {
       ))}
       <Connections segments={[[[0, 0, 0], [-1.9, -0.1, -1.2]]]} color={VIOLET} opacity={0.4} />
 
-      {/* DEPLOY — the container moving onward, toward the cloud */}
-      <FlowPath points={[[0, 0, 0], [0, 0, -2], [0, 0, -4]]} count={4} speed={0.2} color={CYAN} size={0.05} offset={0.4} reducedMotion={reducedMotion} />
+      {/* MULTIPLY — the container becomes three, seeding Kubernetes ahead */}
+      <instancedMesh ref={multiplyRef} args={[undefined, undefined, HANDOFF_NODE_X.length]}>
+        <boxGeometry args={[0.5, 0.34, 0.34]} />
+        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.55} roughness={0.4} metalness={0.3} />
+      </instancedMesh>
+
+      {/* DEPLOY — a thin stream continuing toward where the copies land */}
+      <FlowPath points={[[0, 0, -0.4], [0, 0, -3], [0, 0, -6]]} count={5} speed={0.22} color={CYAN} size={0.05} offset={0.4} reducedMotion={reducedMotion} />
     </group>
   );
 }
 
-/* ---------------------------- SCENE 03: CLOUD ---------------------------- */
-
-function CloudScene({ reducedMotion }: { reducedMotion: boolean }) {
-  const boxes = useMemo(
-    () =>
-      [
-        [-3.4, -0.4, 0, 1.1],
-        [-1.8, 0.2, -0.6, 1.8],
-        [0, -0.7, 0.4, 0.9],
-        [1.8, 0.5, -0.4, 2.2],
-        [3.4, -0.3, 0.5, 1.3],
-      ] as [number, number, number, number][],
-    []
-  );
-  const segments = useMemo<[THREE.Vector3Tuple, THREE.Vector3Tuple][]>(
-    () => boxes.slice(0, -1).map((b, i) => [[b[0], b[1] + b[3] / 2, b[2]], [boxes[i + 1][0], boxes[i + 1][1] + boxes[i + 1][3] / 2, boxes[i + 1][2]]]),
-    [boxes]
-  );
-
-  return (
-    <SlowSpin z={Z.cloud} speed={0.025} reducedMotion={reducedMotion}>
-      <mesh position={[0, -1.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[6, 48]} />
-        <meshStandardMaterial color="#0d1420" transparent opacity={0.55} />
-      </mesh>
-      {boxes.map(([x, y, z, h], i) => (
-        <mesh key={i} position={[x, y - 1.8 + h / 2, z]}>
-          <boxGeometry args={[0.9, h, 0.9]} />
-          <meshStandardMaterial color={AZURE} emissive={AZURE} emissiveIntensity={0.35} roughness={0.4} metalness={0.3} />
-        </mesh>
-      ))}
-      <Connections segments={segments} color={CYAN} opacity={0.4} />
-    </SlowSpin>
-  );
-}
-
-/* -------------------------- SCENE 04: KUBERNETES -------------------------- */
+/* -------------------------- SCENE 03: KUBERNETES -------------------------- */
+// The three containers that just multiplied in from Pipeline arrive here as
+// three nodes, each carrying pods. Pods restart on their own — a constant,
+// ambient "this cluster is alive" motion independent of scroll — and a
+// fourth node scales in as the visitor moves through the back half.
 
 function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
-  const nodeX = [-3.2, 0, 3.2, 5.6];
+  const nodeX = [...HANDOFF_NODE_X, 5.6];
   const podOffsets: [number, number][] = [[-0.4, -0.4], [0.4, -0.4], [0, 0.4]];
 
   const podMeshRef = useRef<THREE.InstancedMesh>(null);
   const scaleNodeRef = useRef<THREE.Group>(null);
   const scaleMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const serviceRef = useRef<THREE.Mesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  useFrame(() => {
+  useFrame((state, delta) => {
+    if (serviceRef.current && !reducedMotion) serviceRef.current.rotation.z += delta * 0.12;
+
     // Scale the cluster out (a 4th node fades in) as the visitor moves
     // through the back half of this zone — AKS node-pool scaling, made
     // physical rather than described.
@@ -269,10 +273,17 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
 
     if (!podMeshRef.current) return;
+    const elapsed = reducedMotion ? 0 : state.clock.elapsedTime;
     let i = 0;
     for (const nx of nodeX.slice(0, 3)) {
       for (const [ox, oz] of podOffsets) {
+        // an ambient "restart" pulse — a pod occasionally dips and recovers,
+        // independent of scroll, so the cluster reads as alive even at rest
+        const cycle = (elapsed * 0.12 + i * 0.41) % 1;
+        const dip = Math.max(0, 1 - Math.pow((cycle - 0.94) * 22, 2));
+        const scale = 1 - dip * 0.85;
         dummy.position.set(nx + ox, 0.7, oz);
+        dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         podMeshRef.current.setMatrixAt(i, dummy.matrix);
         i++;
@@ -310,6 +321,13 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
         <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.7} />
       </instancedMesh>
 
+      {/* services — a flat ring spanning the node row */}
+      <mesh ref={serviceRef} position={[1.2, 1.3, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[3.4, 0.02, 8, 64]} />
+        <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.4} transparent opacity={0.4} />
+      </mesh>
+
+      {/* ingress */}
       <mesh position={[0, 0.2, 5]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.65, 0.08, 12, 32]} />
         <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.6} />
@@ -318,18 +336,99 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       {flowCurves.map((pts, i) => (
         <FlowPath key={i} points={pts} count={7} speed={0.28} offset={i * 0.3} color={CYAN} size={0.07} reducedMotion={reducedMotion} />
       ))}
+    </group>
+  );
+}
 
-      <mesh position={[4.4, -0.3, -2]}>
-        <boxGeometry args={[0.6, 0.6, 0.6]} />
-        <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.35} wireframe />
+/* ------------------------------- SCENE 04: AKS ----------------------------- */
+// The camera pulls back and the cluster is revealed to be sitting inside an
+// Azure boundary. Two node pools are already visible; a third scales in and
+// workloads visibly redistribute across all three — scaling, made physical.
+
+const AKS_POOL_X = [-3, 0, 3];
+
+function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const poolCRef = useRef<THREE.Group>(null);
+  const poolMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const workloadRef = useRef<THREE.InstancedMesh>(null);
+  const envelopeRef = useRef<THREE.Mesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const workloadCount = 9;
+
+  useFrame((_, delta) => {
+    if (envelopeRef.current && !reducedMotion) envelopeRef.current.rotation.y += delta * 0.03;
+
+    const t = localProgress(progressRef.current, "aks");
+    const scaleIn = smoothstep((t - 0.42) / 0.4);
+    if (poolCRef.current) poolCRef.current.scale.setScalar(scaleIn);
+    if (poolMatRef.current) poolMatRef.current.opacity = scaleIn * 0.9;
+
+    if (workloadRef.current) {
+      const activePools = scaleIn > 0.5 ? 3 : 2;
+      for (let i = 0; i < workloadCount; i++) {
+        const poolIdx = i % activePools;
+        const within = Math.floor(i / activePools) - 1;
+        dummy.position.set(AKS_POOL_X[poolIdx] + within * 0.34, 1.05, within * 0.3);
+        dummy.updateMatrix();
+        workloadRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      workloadRef.current.instanceMatrix.needsUpdate = true;
+    }
+  });
+
+  return (
+    <group position={[0, 0, Z.aks]}>
+      {/* the Azure boundary the cluster has been sitting inside all along */}
+      <mesh ref={envelopeRef}>
+        <boxGeometry args={[9, 3, 4]} />
+        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.28} />
       </mesh>
+
+      {[AKS_POOL_X[0], AKS_POOL_X[1]].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          {[0, 1].map((i) => (
+            <mesh key={i} position={[(i - 0.5) * 0.7, 0, 0]}>
+              <cylinderGeometry args={[0.4, 0.46, 0.5, 16]} />
+              <meshStandardMaterial color="#111826" emissive={CYAN} emissiveIntensity={0.25} roughness={0.5} metalness={0.4} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* node pool C — 2 pools become 3 mid-zone */}
+      <group ref={poolCRef} position={[AKS_POOL_X[2], 0, 0]} scale={0}>
+        <mesh position={[-0.35, 0, 0]}>
+          <cylinderGeometry args={[0.4, 0.46, 0.5, 16]} />
+          <meshStandardMaterial ref={poolMatRef} color="#111826" emissive={AMBER} emissiveIntensity={0.35} transparent opacity={0} roughness={0.5} metalness={0.4} />
+        </mesh>
+        <mesh position={[0.35, 0, 0]}>
+          <cylinderGeometry args={[0.4, 0.46, 0.5, 16]} />
+          <meshStandardMaterial color="#111826" emissive={AMBER} emissiveIntensity={0.35} roughness={0.5} metalness={0.4} />
+        </mesh>
+      </group>
+
+      <instancedMesh ref={workloadRef} args={[undefined, undefined, workloadCount]}>
+        <boxGeometry args={[0.22, 0.22, 0.22]} />
+        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.6} />
+      </instancedMesh>
+
+      <Connections
+        segments={[
+          [[AKS_POOL_X[0], 0, 0], [AKS_POOL_X[1], 0, 0]],
+          [[AKS_POOL_X[1], 0, 0], [AKS_POOL_X[2], 0, 0]],
+        ]}
+        color={AZURE}
+        opacity={0.35}
+      />
     </group>
   );
 }
 
 /* ---------------------------- SCENE 05: NETWORK --------------------------- */
+// Traffic reaches the NSG gate and splits: most continues through the
+// private endpoint, some is visibly diverted and never arrives.
 
-function NetworkScene() {
+function NetworkScene({ reducedMotion }: { reducedMotion: boolean }) {
   return (
     <group position={[0, 0, Z.network]}>
       <mesh>
@@ -352,14 +451,17 @@ function NetworkScene() {
         <boxGeometry args={[0.6, 0.6, 0.6]} />
         <meshStandardMaterial color="#eaf6ff" emissive="#eaf6ff" emissiveIntensity={0.4} roughness={0.3} metalness={0.5} />
       </mesh>
-      <FlowPath points={[[-2, 0, 0], [-0.4, 0, 0], [1.7, 0, 0], [3.1, 0, 0], [4.4, 0, 0]]} count={6} speed={0.15} color={CYAN} size={0.05} />
+      {/* accepted traffic — passes the gate, reaches the endpoint */}
+      <FlowPath points={[[-2, 0, 0], [-0.4, 0, 0], [1.7, 0, 0], [3.1, 0, 0], [4.4, 0, 0]]} count={6} speed={0.15} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+      {/* rejected traffic — meets the gate and never arrives */}
+      <FlowPath points={[[1.5, 0.15, 0], [2, -0.55, 0.35], [2.3, -1.05, 0.55]]} count={3} speed={0.22} color={RED} size={0.045} reducedMotion={reducedMotion} />
     </group>
   );
 }
 
 /* --------------------------- SCENE 06: SECURITY ---------------------------- */
 
-function SecurityScene() {
+function SecurityScene({ reducedMotion }: { reducedMotion: boolean }) {
   const secretsRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const secretCount = 6;
@@ -397,17 +499,77 @@ function SecurityScene() {
         <sphereGeometry args={[0.06, 8, 8]} />
         <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={1} />
       </instancedMesh>
-      {/* the response, only after the gate */}
-      <FlowPath points={[[-3.2, 0, 0], [-1.6, 0, 0], [0, 0, 0]]} count={3} speed={0.1} color={AMBER} size={0.05} />
+      {/* the request, only granted past the gate */}
+      <FlowPath points={[[-3.2, 0, 0], [-1.6, 0, 0], [0, 0, 0]]} count={3} speed={0.1} color={AMBER} size={0.05} reducedMotion={reducedMotion} />
+      {/* the secret, carried back out */}
+      <FlowPath points={[[0, 0.15, 0], [-1.6, 0.15, 0], [-3.2, 0.15, 0]]} count={2} speed={0.08} offset={0.5} color={VIOLET} size={0.045} reducedMotion={reducedMotion} />
     </group>
   );
 }
 
-/* ----------------------------- SCENE 07: AUTOMATION ------------------------ */
+/* --------------------------- SCENE 07: SERVICE BUS -------------------------- */
+
+function ServiceBusScene({ reducedMotion }: { reducedMotion: boolean }) {
+  return (
+    <group position={[0, 0, Z.servicebus]}>
+      {/* application */}
+      <mesh position={[-3.4, 0.2, 0]}>
+        <boxGeometry args={[0.5, 0.5, 0.5]} />
+        <meshStandardMaterial color="#eaf6ff" emissive="#eaf6ff" emissiveIntensity={0.3} />
+      </mesh>
+      {/* namespace boundary */}
+      <mesh position={[-0.4, 0, 0]}>
+        <boxGeometry args={[3.4, 1.4, 1.4]} />
+        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.4} />
+      </mesh>
+      {/* topic */}
+      <mesh position={[-0.4, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.28, 0.28, 2.6, 20]} />
+        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.35} transparent opacity={0.7} />
+      </mesh>
+      {/* subscriptions branching off */}
+      {[0.6, -0.6].map((y, i) => (
+        <mesh key={i} position={[1.4, y, 0]}>
+          <sphereGeometry args={[0.22, 16, 16]} />
+          <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.5} />
+        </mesh>
+      ))}
+      {/* consumers */}
+      {[0.6, -0.6].map((y, i) => (
+        <mesh key={i} position={[2.8, y, 0]}>
+          <boxGeometry args={[0.4, 0.4, 0.4]} />
+          <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.4} />
+        </mesh>
+      ))}
+      {/* dead-letter area — a separate, amber-tinted holding zone that
+          Automation, next, will be shown clearing out */}
+      <mesh position={[1.4, -2, -0.5]}>
+        <boxGeometry args={[0.9, 0.6, 0.6]} />
+        <meshStandardMaterial color={RED} emissive={RED} emissiveIntensity={0.3} wireframe />
+      </mesh>
+
+      {/* main flow: app → topic → subscriptions → consumers */}
+      <FlowPath points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, 0.6, 0], [2.8, 0.6, 0]]} count={5} speed={0.14} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+      <FlowPath points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, -0.6, 0], [2.8, -0.6, 0]]} count={5} speed={0.12} offset={0.4} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
+      {/* a slower, diverted stream — the messages that don't make it through cleanly */}
+      <FlowPath points={[[-0.4, 0, 0], [0.5, -1, -0.3], [1.4, -2, -0.5]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
+    </group>
+  );
+}
+
+/* ----------------------------- SCENE 08: AUTOMATION ------------------------ */
+// A three-act transformation, all driven by local scroll progress: the
+// dead-letter clutter from Service Bus settles into an ordered flow
+// (0–0.5), a validation sweep confirms it (0.5–0.75), then a small report
+// resolves out of it (0.75–1) — chaos, automation, validation, structured
+// output, exactly as described, not summarized.
 
 function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const count = 9;
   const scatteredMeshRef = useRef<THREE.InstancedMesh>(null);
+  const validationRef = useRef<THREE.Mesh>(null);
+  const validationMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const reportRef = useRef<THREE.Group>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   const scattered = useMemo(
@@ -431,25 +593,43 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const rotSeeds = useMemo(() => Array.from({ length: count }, (_, i) => i * 1.7), []);
   const slateColor = useMemo(() => new THREE.Color(SLATE), []);
   const cyanColor = useMemo(() => new THREE.Color(CYAN), []);
+  const greenColor = useMemo(() => new THREE.Color(GREEN), []);
   const instanceColor = useMemo(() => new THREE.Color(), []);
 
   useFrame(() => {
-    if (!scatteredMeshRef.current) return;
-    // The manual-to-automated transformation is literally driven by how
-    // far the visitor has scrolled through this zone — not a timer. Dull,
-    // scattered slate cubes settle into bright, ordered cyan ones.
     const t = localProgress(progressRef.current, "automation");
-    const eased = t * t * (3 - 2 * t); // smoothstep
-    for (let i = 0; i < count; i++) {
-      dummy.position.lerpVectors(scattered[i], organized[i], eased);
-      dummy.rotation.set(rotSeeds[i] * (1 - eased), rotSeeds[i] * (1 - eased), 0);
-      dummy.updateMatrix();
-      instanceColor.lerpColors(slateColor, cyanColor, eased);
-      scatteredMeshRef.current.setColorAt(i, instanceColor);
-      scatteredMeshRef.current.setMatrixAt(i, dummy.matrix);
+
+    // ACT 1 — CHAOS -> ORDER (0 – 0.5)
+    const orderEased = smoothstep(t / 0.5);
+    // ACT 2 — VALIDATION sweep (0.5 – 0.75)
+    const validationT = Math.max(0, Math.min(1, (t - 0.5) / 0.25));
+    // ACT 3 — REPORT resolves (0.75 – 1)
+    const reportT = smoothstep((t - 0.75) / 0.25);
+
+    if (scatteredMeshRef.current) {
+      for (let i = 0; i < count; i++) {
+        dummy.position.lerpVectors(scattered[i], organized[i], orderEased);
+        dummy.rotation.set(rotSeeds[i] * (1 - orderEased), rotSeeds[i] * (1 - orderEased), 0);
+        dummy.updateMatrix();
+        // validated cubes flash green as the sweep passes their column
+        const col = i % 3;
+        const passed = validationT > col / 3;
+        instanceColor.lerpColors(slateColor, passed ? greenColor : cyanColor, orderEased);
+        scatteredMeshRef.current.setColorAt(i, instanceColor);
+        scatteredMeshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      scatteredMeshRef.current.instanceMatrix.needsUpdate = true;
+      if (scatteredMeshRef.current.instanceColor) scatteredMeshRef.current.instanceColor.needsUpdate = true;
     }
-    scatteredMeshRef.current.instanceMatrix.needsUpdate = true;
-    if (scatteredMeshRef.current.instanceColor) scatteredMeshRef.current.instanceColor.needsUpdate = true;
+
+    if (validationRef.current && validationMatRef.current) {
+      validationRef.current.position.x = THREE.MathUtils.lerp(2.2, 4.2, validationT);
+      validationMatRef.current.opacity = validationT > 0 && validationT < 1 ? 0.85 : 0;
+    }
+
+    if (reportRef.current) {
+      reportRef.current.scale.setScalar(Math.max(0.001, reportT));
+    }
   });
 
   return (
@@ -458,66 +638,103 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
         <boxGeometry args={[0.36, 0.36, 0.36]} />
         <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
       </instancedMesh>
+
       {/* the automation gate the objects pass through as they organize */}
       <mesh rotation={[0, Math.PI / 2, 0]}>
         <torusGeometry args={[0.9, 0.1, 12, 32]} />
         <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.7} />
       </mesh>
       <FlowPath points={[[-3.6, 0.2, 0], [-1.2, 0.1, 0.4], [0, 0, 0], [1.4, 0, -0.1], [3.2, 0, 0]]} count={5} speed={0.1} color={AMBER} size={0.065} reducedMotion={reducedMotion} />
+
+      {/* validation — a thin ring sweeping across the organized grid */}
+      <mesh ref={validationRef} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.75, 0.02, 8, 32]} />
+        <meshBasicMaterial ref={validationMatRef} color={GREEN} transparent opacity={0} />
+      </mesh>
+
+      {/* report — a small resolved card, the structured output */}
+      <group ref={reportRef} position={[5.1, 0.1, 0]} scale={0.001}>
+        <mesh>
+          <planeGeometry args={[1.3, 0.9]} />
+          <meshPhysicalMaterial color="#0d1420" transparent opacity={0.85} clearcoat={0.6} side={THREE.DoubleSide} />
+        </mesh>
+        {[0.28, 0.05, -0.18].map((y, i) => (
+          <mesh key={i} position={[i === 0 ? -0.15 : 0, y, 0.01]}>
+            <planeGeometry args={[i === 0 ? 0.7 : 0.95, 0.07]} />
+            <meshBasicMaterial color={i === 0 ? GREEN : "#3a4358"} />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
 }
 
-/* --------------------------- SCENE 08: SERVICE BUS -------------------------- */
+/* --------------------------- SCENE 09: MONITORING --------------------------- */
+// An orbiting ring watching the whole system — infrastructure, workloads,
+// messaging, network — represented as small nodes in constant motion. In
+// the back of the zone, a signal launches ahead into Production: the first
+// sign of the incident the visitor is about to walk into.
 
-function ServiceBusScene({ reducedMotion }: { reducedMotion: boolean }) {
+const MONITOR_NODES = [
+  { color: CYAN, r: 1.6, speed: 0.4 },
+  { color: VIOLET, r: 1.6, speed: -0.3 },
+  { color: AMBER, r: 1.9, speed: 0.25 },
+  { color: AZURE, r: 1.3, speed: -0.5 },
+];
+
+function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  const signalRef = useRef<THREE.Mesh>(null);
+  const signalMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const orbitRefs = useRef<(THREE.Mesh | null)[]>([]);
+
+  useFrame((state, delta) => {
+    if (ringRef.current && !reducedMotion) ringRef.current.rotation.z += delta * 0.15;
+
+    if (!reducedMotion) {
+      MONITOR_NODES.forEach((n, i) => {
+        const m = orbitRefs.current[i];
+        if (!m) return;
+        const a = state.clock.elapsedTime * n.speed + i * 2;
+        m.position.set(Math.cos(a) * n.r, Math.sin(a * 0.6) * 0.4, Math.sin(a) * n.r);
+      });
+    }
+
+    // the first signal of the incident ahead — launches toward Production
+    // in the back 40% of this zone
+    const t = localProgress(progressRef.current, "monitoring");
+    const alertT = Math.max(0, (t - 0.6) / 0.4);
+    if (signalRef.current && signalMatRef.current) {
+      signalRef.current.position.z = THREE.MathUtils.lerp(0, -6.5, alertT);
+      signalMatRef.current.opacity = alertT > 0.02 && alertT < 0.96 ? 0.9 : 0;
+    }
+  });
+
   return (
-    <group position={[0, 0, Z.servicebus]}>
-      {/* application */}
-      <mesh position={[-3.4, 0.2, 0]}>
-        <boxGeometry args={[0.5, 0.5, 0.5]} />
-        <meshStandardMaterial color="#eaf6ff" emissive="#eaf6ff" emissiveIntensity={0.3} />
+    <group position={[0, 0.5, Z.monitoring]}>
+      <mesh>
+        <sphereGeometry args={[0.4, 16, 16]} />
+        <meshStandardMaterial color="#111826" emissive={CYAN} emissiveIntensity={0.3} />
       </mesh>
-      {/* namespace boundary */}
-      <mesh position={[-0.4, 0, 0]}>
-        <boxGeometry args={[3.4, 1.4, 1.4]} />
-        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.4} />
+      <mesh ref={ringRef} rotation={[Math.PI / 2.4, 0, 0]}>
+        <torusGeometry args={[2, 0.03, 8, 64]} />
+        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} transparent opacity={0.5} />
       </mesh>
-      {/* queue / topic */}
-      <mesh position={[-0.4, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.28, 0.28, 2.6, 20]} />
-        <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.35} transparent opacity={0.7} />
-      </mesh>
-      {/* subscriptions branching off */}
-      {[0.6, -0.6].map((y, i) => (
-        <mesh key={i} position={[1.4, y, 0]}>
-          <sphereGeometry args={[0.22, 16, 16]} />
-          <meshStandardMaterial color={VIOLET} emissive={VIOLET} emissiveIntensity={0.5} />
+      {MONITOR_NODES.map((n, i) => (
+        <mesh key={i} ref={(el) => { orbitRefs.current[i] = el; }}>
+          <sphereGeometry args={[0.12, 12, 12]} />
+          <meshStandardMaterial color={n.color} emissive={n.color} emissiveIntensity={0.8} />
         </mesh>
       ))}
-      {/* consumers */}
-      {[0.6, -0.6].map((y, i) => (
-        <mesh key={i} position={[2.8, y, 0]}>
-          <boxGeometry args={[0.4, 0.4, 0.4]} />
-          <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.4} />
-        </mesh>
-      ))}
-      {/* dead-letter area — a separate, amber-tinted holding zone */}
-      <mesh position={[1.4, -2, -0.5]}>
-        <boxGeometry args={[0.9, 0.6, 0.6]} />
-        <meshStandardMaterial color={RED} emissive={RED} emissiveIntensity={0.3} wireframe />
+      <mesh ref={signalRef}>
+        <sphereGeometry args={[0.09, 10, 10]} />
+        <meshBasicMaterial ref={signalMatRef} color={AMBER} transparent opacity={0} />
       </mesh>
-
-      {/* main flow: app → queue → subscriptions → consumers */}
-      <FlowPath points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, 0.6, 0], [2.8, 0.6, 0]]} count={5} speed={0.14} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
-      <FlowPath points={[[-3.4, 0.2, 0], [-0.4, 0, 0], [1.4, -0.6, 0], [2.8, -0.6, 0]]} count={5} speed={0.12} offset={0.4} color={CYAN} size={0.05} reducedMotion={reducedMotion} />
-      {/* a slower, diverted stream — the messages that don't make it through cleanly */}
-      <FlowPath points={[[-0.4, 0, 0], [0.5, -1, -0.3], [1.4, -2, -0.5]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
     </group>
   );
 }
 
-/* ------------------------- SCENE 09: PRODUCTION ---------------------------- */
+/* ------------------------- SCENE 10: PRODUCTION ---------------------------- */
 
 function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -576,11 +793,13 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
         <torusGeometry args={[1.4, 0.03, 8, 48]} />
         <meshBasicMaterial ref={alertMatRef} color={AMBER} transparent opacity={0} />
       </mesh>
+      {/* traffic — an ambient loop past the core, always alive */}
+      <FlowPath points={[[-2.6, 0.6, -1], [-0.6, 0.2, 0.6], [0.6, -0.2, -0.6], [2.6, -0.6, 1]]} count={5} speed={0.18} color={CYAN} size={0.05} />
     </group>
   );
 }
 
-/* ------------------------------- SCENE 10: DR ------------------------------ */
+/* ------------------------------- SCENE 11: DR ------------------------------ */
 
 const DR_PRIMARY_LEAD = 4;
 const DR_SECONDARY_LEAD = -5;
@@ -600,7 +819,8 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
     }
 
     const t = localProgress(progressRef.current, "dr");
-    // 0–0.4 primary active; 0.4–0.6 failover event; 0.6–1 secondary active.
+    // 0–0.4 primary active, replicating; 0.4–0.6 failover event; 0.6–1
+    // secondary active.
     const primaryHealth = t < 0.4 ? 1 : Math.max(0, 1 - (t - 0.4) / 0.2);
     const secondaryHealth = t < 0.4 ? 0.25 : Math.min(1, (t - 0.4) / 0.2);
 
@@ -625,6 +845,7 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
         <icosahedronGeometry args={[0.8, 1]} />
         <meshStandardMaterial ref={secondaryMatRef} color={VIOLET} emissive={VIOLET} emissiveIntensity={0.6} wireframe />
       </mesh>
+      {/* the replication beam — always present, primary to secondary */}
       <mesh ref={beamRef} position={[0, 0.05, beamMid]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[0.025, 0.025, DR_PRIMARY_LEAD - DR_SECONDARY_LEAD, 8]} />
         <meshBasicMaterial color={CYAN} transparent opacity={0.3} />
@@ -656,13 +877,13 @@ export function Scene({ progressRef, reducedMotion = false }: { progressRef: Scr
 
   return (
     <>
-      <fog attach="fog" args={["#05070d", 22, 115]} />
+      <fog attach="fog" args={["#05070d", 24, 135]} />
       <ambientLight intensity={0.4} />
       <directionalLight position={[6, 10, 6]} intensity={1.1} color="#eaf6ff" />
       <Rig progressRef={progressRef} glassRef={glassRef} />
 
       <Grid
-        position={[0, -2.4, -40]}
+        position={[0, -2.4, -70]}
         args={[10, 10]}
         cellSize={2}
         cellThickness={0.6}
@@ -670,18 +891,19 @@ export function Scene({ progressRef, reducedMotion = false }: { progressRef: Scr
         sectionSize={10}
         sectionThickness={1.2}
         sectionColor="#3a4358"
-        fadeDistance={100}
+        fadeDistance={140}
         fadeStrength={1.2}
         infiniteGrid
       />
 
-      <PipelineScene reducedMotion={reducedMotion} />
-      <CloudScene reducedMotion={reducedMotion} />
+      <PipelineScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <KubernetesScene progressRef={progressRef} reducedMotion={reducedMotion} />
-      <NetworkScene />
-      <SecurityScene />
-      <AutomationScene progressRef={progressRef} reducedMotion={reducedMotion} />
+      <AksScene progressRef={progressRef} reducedMotion={reducedMotion} />
+      <NetworkScene reducedMotion={reducedMotion} />
+      <SecurityScene reducedMotion={reducedMotion} />
       <ServiceBusScene reducedMotion={reducedMotion} />
+      <AutomationScene progressRef={progressRef} reducedMotion={reducedMotion} />
+      <MonitoringScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <ProductionScene progressRef={progressRef} />
       <DisasterRecoveryScene progressRef={progressRef} />
       <GlassMoment z={Z.impact} tint="#f5b642" />
