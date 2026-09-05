@@ -1820,11 +1820,21 @@ function RevealScene({ progressRef, reducedMotion }: { progressRef: ScrollProgre
 // — not a screenshot wall — that only brighten as the rider actually
 // reaches each one, then stay lit behind us as the road continues.
 
-const IMPACT_Z_OFFSET = -5;
-const IMPACT_MARKER_X = [-1.2, 1];
+// Measured with ?debug3d=1: this project's usual -5 short-zone offset
+// put marker 1's peak (local 0.15) inside the *tail* of the reveal
+// zone's own pull-back ramp, which bleeds roughly half a zone-width
+// into whatever comes right after Reveal (it ramps back down to zero
+// over the same 0.03-progress buffer it ramped up in, landing around
+// this zone's own local progress 0.5) — read 73deg off-axis despite
+// being otherwise correctly anchored. -9, the same fix Automation
+// uses for its own back-loaded structure, pushes this zone's crossover
+// out past local progress 1, leaving room to place both markers after
+// that ramp has fully cleared instead of racing it.
+const IMPACT_Z_OFFSET = -9;
+const IMPACT_MARKER_X = [-1.2, 0.6];
 const IMPACT_WINDOWS: [number, number][] = [
-  [0, 0.15],
-  [0.2, 0.32],
+  [0.4, 0.6],
+  [0.65, 0.85],
 ];
 
 function ImpactScene({ progressRef }: { progressRef: ScrollProgressRef }) {

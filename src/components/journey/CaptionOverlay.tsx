@@ -30,7 +30,7 @@ const PRODUCTION_BEAT_THRESHOLDS = beatThresholds("production");
 // `beats` array, but they use the exact same useZoneStage mechanism as
 // every other staged zone.
 const REVEAL_THRESHOLDS = [0, 0.25, 0.5, 0.75];
-const IMPACT_THRESHOLDS = [0, 0.2];
+const IMPACT_THRESHOLDS = [0, 0.6];
 const RECOMMENDATIONS_THRESHOLDS = [0, 0.35, 0.6, 0.85];
 
 export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
