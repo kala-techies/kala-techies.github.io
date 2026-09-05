@@ -35,11 +35,16 @@ export interface BeatMeta {
   peakProgress: number;
 }
 
+// Trigger/peak values below reflect the fixes made after live measurement
+// with ?debug3d=1 (see commit history for the actual failing readings —
+// every one of the first five was measured BEHIND the camera at its old
+// peakProgress before these fixes). Re-verify with the same tool after
+// touching any of these five beats again.
 export const BEAT_META: Record<BeatId, BeatMeta> = {
-  pipelineMultiply: { label: "Pipeline container multiply", zone: "pipeline", triggerProgress: 0.3, peakProgress: 0.65 },
-  kubernetesFourthNode: { label: "Kubernetes 4th node scale-in", zone: "kubernetes", triggerProgress: 0.35, peakProgress: 0.75 },
-  aksNodePool: { label: "AKS 3rd node-pool scale-in", zone: "aks", triggerProgress: 0.25, peakProgress: 0.65 },
-  networkNsgSplit: { label: "Network NSG accept/reject split", zone: "network", triggerProgress: 0, peakProgress: 0.5 },
+  pipelineMultiply: { label: "Pipeline container multiply", zone: "pipeline", triggerProgress: 0.1, peakProgress: 0.35 },
+  kubernetesFourthNode: { label: "Kubernetes 4th node scale-in", zone: "kubernetes", triggerProgress: 0.05, peakProgress: 0.32 },
+  aksNodePool: { label: "AKS 3rd node-pool scale-in", zone: "aks", triggerProgress: 0.1, peakProgress: 0.4 },
+  networkNsgSplit: { label: "Network NSG accept/reject split", zone: "network", triggerProgress: 0, peakProgress: 0.3 },
   serviceBusToAutomation: { label: "Service Bus -> Automation handoff", zone: "automation", triggerProgress: 0, peakProgress: 0.04 },
   monitoringSignal: { label: "Monitoring alert signal", zone: "monitoring", triggerProgress: 0.35, peakProgress: 0.85 },
   productionIncident: { label: "Production incident peak", zone: "production", triggerProgress: 0.25, peakProgress: 0.5 },

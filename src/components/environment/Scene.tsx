@@ -278,10 +278,13 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
     if (buildRef.current && !reducedMotion) buildRef.current.rotation.y += delta * 0.4;
 
     const t = localProgress(progressRef.current, "pipeline");
-    // Triggers with the back 70% of the zone still ahead, not just the
-    // last sliver — the transformation needs to finish while the camera
-    // still has room to approach it, not exactly as the camera arrives.
-    const eased = smoothstep((t - 0.3) / 0.35);
+    // Measured with the runtime diagnostic (?debug3d=1): the camera
+    // reaches this beat's target world-z (local -6.2, i.e. world -0.2) at
+    // local progress 0.517 — completing the animation at 0.65, as the
+    // previous "conservative" retiming did, finishes it AFTER the camera
+    // has already passed it (confirmed: BEHIND, 138° off-axis). Completing
+    // by 0.35 leaves a real margin before the 0.517 pass-point.
+    const eased = smoothstep((t - 0.1) / 0.25);
 
     if (containerRef.current) {
       // the original container fades as its copies take over the frame
@@ -384,10 +387,16 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     if (serviceRef.current && !reducedMotion) serviceRef.current.rotation.z += delta * 0.12;
 
     // Scale the cluster out (a 4th node fades in) as the visitor moves
-    // through the back half of this zone — AKS node-pool scaling, made
-    // physical rather than described.
+    // through this zone — AKS node-pool scaling, made physical rather
+    // than described. Measured with ?debug3d=1: this node sits at the
+    // same world-z as the other three (the zone's own start anchor), and
+    // the camera reaches that z at local progress 0 — the previous 0.75
+    // completion point was always behind the camera (confirmed: BEHIND,
+    // 108deg off-axis). Its own -6 local z offset (see JSX below) pushes
+    // its actual pass-point out to local progress 0.5, and completing by
+    // 0.32 leaves real margin before that.
     const t = localProgress(progressRef.current, "kubernetes");
-    const scaleIn = Math.max(0, Math.min(1, (t - 0.35) / 0.4));
+    const scaleIn = Math.max(0, Math.min(1, (t - 0.05) / 0.27));
     if (scaleNodeRef.current) scaleNodeRef.current.scale.setScalar(scaleIn);
     if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
 
@@ -433,7 +442,7 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
       {/* the scaling node — invisible until scroll progress inside this
           zone crosses the threshold, then grows in */}
-      <group ref={scaleNodeRef} position={[nodeX[3], 0.1, 0]} scale={0}>
+      <group ref={scaleNodeRef} position={[nodeX[3], 0.1, -6]} scale={0}>
         <mesh>
           <cylinderGeometry args={[0.7, 0.78, 0.6, 24]} />
           <meshStandardMaterial ref={scaleMatRef} color="#111826" emissive={AMBER} emissiveIntensity={0.3} transparent opacity={0} roughness={0.5} metalness={0.4} />
@@ -470,6 +479,7 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 // workloads visibly redistribute across all three — scaling, made physical.
 
 const AKS_POOL_X = [-3, 0, 3];
+const AKS_POOL_C_Z = -6;
 
 function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const poolCRef = useRef<THREE.Group>(null);
@@ -483,8 +493,13 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
   useFrame((_, delta) => {
     if (envelopeRef.current && !reducedMotion) envelopeRef.current.rotation.y += delta * 0.03;
 
+    // Measured with ?debug3d=1: pool C at the zone's own start anchor was
+    // BEHIND the camera by 142deg at its old 0.65 completion point — the
+    // camera reaches that world-z at local progress 0. Its own -6 local z
+    // offset (see JSX below) pushes the real pass-point to local progress
+    // 0.6; completing by 0.4 leaves real margin before that.
     const t = localProgress(progressRef.current, "aks");
-    const scaleIn = smoothstep((t - 0.25) / 0.4);
+    const scaleIn = smoothstep((t - 0.1) / 0.3);
     if (poolCRef.current) poolCRef.current.scale.setScalar(scaleIn);
     if (poolMatRef.current) poolMatRef.current.opacity = scaleIn * 0.9;
 
@@ -498,7 +513,8 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
       for (let i = 0; i < workloadCount; i++) {
         const poolIdx = i % activePools;
         const within = Math.floor(i / activePools) - 1;
-        dummy.position.set(AKS_POOL_X[poolIdx] + within * 0.34, 1.05, within * 0.3);
+        const poolZ = poolIdx === 2 ? AKS_POOL_C_Z : 0;
+        dummy.position.set(AKS_POOL_X[poolIdx] + within * 0.34, 1.05, poolZ + within * 0.3);
         dummy.updateMatrix();
         workloadRef.current.setMatrixAt(i, dummy.matrix);
       }
@@ -525,8 +541,13 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
         </group>
       ))}
 
-      {/* node pool C — 2 pools become 3 mid-zone */}
-      <group ref={poolCRef} position={[AKS_POOL_X[2], 0, 0]} scale={0}>
+      {/* node pool C — 2 pools become 3 mid-zone. Offset -6 in z (past
+          this zone's own start anchor) so the camera doesn't reach its
+          world position until local progress 0.6, giving the scale-in
+          room to complete while still in front of the camera — measured
+          with ?debug3d=1, its old z=0 placement was behind by local
+          progress 0 (see AKS_POOL_C_Z below). */}
+      <group ref={poolCRef} position={[AKS_POOL_X[2], 0, AKS_POOL_C_Z]} scale={0}>
         <mesh position={[-0.35, 0, 0]}>
           <cylinderGeometry args={[0.4, 0.46, 0.5, 16]} />
           <meshStandardMaterial ref={poolMatRef} color="#111826" emissive={AMBER} emissiveIntensity={0.35} transparent opacity={0} roughness={0.5} metalness={0.4} />
@@ -545,7 +566,7 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
       <Connections
         segments={[
           [[AKS_POOL_X[0], 0, 0], [AKS_POOL_X[1], 0, 0]],
-          [[AKS_POOL_X[1], 0, 0], [AKS_POOL_X[2], 0, 0]],
+          [[AKS_POOL_X[1], 0, 0], [AKS_POOL_X[2], 0, AKS_POOL_C_Z]],
         ]}
         color={AZURE}
         opacity={0.35}
@@ -557,6 +578,16 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
 /* ---------------------------- SCENE 05: NETWORK --------------------------- */
 // Traffic reaches the NSG gate and splits: most continues through the
 // private endpoint, some is visibly diverted and never arrives.
+
+// Measured with ?debug3d=1: at this scene's old anchor (the zone's own
+// start Z, matching every element's local z=0), the camera reached that
+// world position at local progress 0 — the whole scene, NSG included,
+// was already behind the camera for nearly this entire zone (confirmed:
+// BEHIND, 153deg off-axis at local progress 0.5). Pushing the whole
+// group 5 units deeper moves the real pass-point out to local progress
+// 0.5, so the traffic split is in front of the camera for the front
+// half of the zone instead of almost none of it.
+const NETWORK_Z_OFFSET = -5;
 
 function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -572,7 +603,7 @@ function NetworkScene({ progressRef, reducedMotion }: { progressRef: ScrollProgr
   });
 
   return (
-    <group ref={groupRef} position={[0, 0, Z.network]}>
+    <group ref={groupRef} position={[0, 0, Z.network + NETWORK_Z_OFFSET]}>
       <mesh>
         <boxGeometry args={[5, 2, 3.6]} />
         <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.4} />
@@ -706,6 +737,18 @@ function ServiceBusScene({ reducedMotion }: { reducedMotion: boolean }) {
 // resolves out of it (0.75–1) — chaos, automation, validation, structured
 // output, exactly as described, not summarized.
 
+// Measured with ?debug3d=1: at the zone's own start anchor, the red
+// dead-letter callback moment (local progress 0.04) was already behind
+// the camera (confirmed: BEHIND, 98deg off-axis, only 1.5 units away —
+// the camera passes this anchor almost immediately on entering the
+// zone). This scene has three sequential acts sharing the same flat z
+// (chaos/order 0-0.5, validation 0.5-0.75, report 0.75-1), so fixing
+// only the earliest one isn't enough — a -9 offset pushes the pass-point
+// out to local progress 0.75, covering chaos/order and validation with
+// margin; the report card additionally sits its own few units deeper
+// (see its own position below) to stay ahead through act three too.
+const AUTOMATION_Z_OFFSET = -9;
+
 function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
   const count = 9;
   const scatteredMeshRef = useRef<THREE.InstancedMesh>(null);
@@ -793,7 +836,7 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   });
 
   return (
-    <group position={[0, 0, Z.automation]}>
+    <group position={[0, 0, Z.automation + AUTOMATION_Z_OFFSET]}>
       <instancedMesh ref={scatteredMeshRef} args={[undefined, undefined, count]}>
         <boxGeometry args={[0.36, 0.36, 0.36]} />
         <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
@@ -813,7 +856,7 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       </mesh>
 
       {/* report — a small resolved card, the structured output */}
-      <group ref={reportRef} position={[5.1, 0.1, 0]} scale={0.001}>
+      <group ref={reportRef} position={[5.1, 0.1, -2]} scale={0.001}>
         <mesh>
           <planeGeometry args={[1.3, 0.9]} />
           <meshPhysicalMaterial color="#0d1420" transparent opacity={0.85} clearcoat={0.6} side={THREE.DoubleSide} />
