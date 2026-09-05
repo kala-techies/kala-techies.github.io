@@ -834,7 +834,9 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       reportRef.current.scale.setScalar(Math.max(0.001, reportT));
       if (DEBUG_3D) {
         reportRef.current.updateMatrixWorld(true);
-        recordBeat("automationReport", reportRef.current.getWorldPosition(automationDebugScratch), t);
+        const wp = reportRef.current.getWorldPosition(automationDebugScratch);
+        console.warn("[debug3d-temp] report local pos", reportRef.current.position.toArray(), "world pos", wp.toArray(), "parent world pos", reportRef.current.parent?.getWorldPosition(new THREE.Vector3()).toArray());
+        recordBeat("automationReport", wp, t);
       }
     }
   });
