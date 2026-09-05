@@ -18,11 +18,12 @@ export function CaptionOverlay({ zone }: { zone: number }) {
           style={{ textShadow }}
         >
           {zone === 0 && <IdentityCaption />}
-          {zone >= 1 && zone <= 6 && <SceneCaption index={zone - 1} />}
-          {zone === 7 && <ImpactCaption />}
-          {zone === 8 && <RecommendationsCaption />}
-          {zone === 9 && <WorkCaption />}
-          {zone === 10 && <ConnectCaption />}
+          {zone >= 1 && zone <= 9 && <SceneCaption index={zone - 1} />}
+          {zone === 10 && <RevealCaption />}
+          {zone === 11 && <ImpactCaption />}
+          {zone === 12 && <RecommendationsCaption />}
+          {zone === 13 && <WorkCaption />}
+          {zone === 14 && <ConnectCaption />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -49,6 +50,15 @@ function SceneCaption({ index }: { index: number }) {
       <p className="font-mono text-xs tracking-widest text-cyan uppercase">{scene.eyebrow}</p>
       <h2 className="mt-2 text-3xl font-semibold text-ink sm:text-4xl">{scene.heading}</h2>
       <p className="mt-2 text-ink-dim">{scene.line}</p>
+    </div>
+  );
+}
+
+function RevealCaption() {
+  return (
+    <div className="mx-auto max-w-lg text-center">
+      <p className="font-mono text-xs tracking-widest text-cyan uppercase">One system</p>
+      <h2 className="mt-2 text-2xl font-semibold text-ink sm:text-3xl">Everything you just walked through is connected.</h2>
     </div>
   );
 }

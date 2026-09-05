@@ -14,11 +14,11 @@ import { JourneyFallback } from "../journey/JourneyFallback";
 const CanvasScene = lazy(() => import("./CanvasScene").then((m) => ({ default: m.CanvasScene })));
 
 // Total scroll distance driving the journey, in viewport heights.
-const JOURNEY_VH = 900;
+const JOURNEY_VH = 1400;
 
 /**
  * The cinematic mode: a fixed, page-spanning 3D canvas whose camera
- * dollies through 11 zones as the visitor scrolls, with a thin fixed
+ * dollies through 15 zones as the visitor scrolls, with a thin fixed
  * caption overlay whose content swaps per zone — the DOM is not a series
  * of sections you scroll past, it's a subtitle track for the 3D journey.
  * A tall, otherwise-empty spacer supplies the scrollable distance.

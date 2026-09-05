@@ -27,6 +27,11 @@ export function JourneyFallback({ visuallyHidden = false }: { visuallyHidden?: b
         </section>
       ))}
 
+      <section className="py-16 text-center">
+        <p className="font-mono text-xs tracking-widest text-cyan uppercase">One system</p>
+        <h2 className="mt-2 text-2xl font-semibold text-ink">Everything you just walked through is connected.</h2>
+      </section>
+
       <section className="py-16">
         <p className="font-mono text-xs tracking-widest text-amber uppercase">Impact</p>
         <div className="mt-4 space-y-4">
