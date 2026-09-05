@@ -834,9 +834,7 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       reportRef.current.scale.setScalar(Math.max(0.001, reportT));
       if (DEBUG_3D) {
         reportRef.current.updateMatrixWorld(true);
-        const wp = reportRef.current.getWorldPosition(automationDebugScratch);
-        console.warn("[debug3d-temp] report local pos", reportRef.current.position.toArray(), "world pos", wp.toArray(), "parent world pos", reportRef.current.parent?.getWorldPosition(new THREE.Vector3()).toArray());
-        recordBeat("automationReport", wp, t);
+        recordBeat("automationReport", reportRef.current.getWorldPosition(automationDebugScratch), t);
       }
     }
   });
@@ -862,7 +860,7 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       </mesh>
 
       {/* report — a small resolved card, the structured output */}
-      <group ref={reportRef} position={[5.1, 0.1, -6]} scale={0.001}>
+      <group ref={reportRef} position={[5.1, 0.1, -10]} scale={0.001}>
         <mesh>
           <planeGeometry args={[1.3, 0.9]} />
           <meshPhysicalMaterial color="#0d1420" transparent opacity={0.85} clearcoat={0.6} side={THREE.DoubleSide} />
