@@ -27,10 +27,15 @@ export type BeatId =
   | "serviceBusFanout"
   | "serviceBusDeadLetter"
   | "serviceBusToAutomation"
+  | "automationActivation"
   | "automationReport"
+  | "monitoringAnomaly"
   | "monitoringSignal"
   | "productionIncident"
-  | "drFailover";
+  | "productionResponse"
+  | "drSecondaryReveal"
+  | "drFailover"
+  | "drStabilization";
 
 export interface BeatMeta {
   label: string;
@@ -57,10 +62,15 @@ export const BEAT_META: Record<BeatId, BeatMeta> = {
   serviceBusFanout: { label: "Service Bus topic fan-out", zone: "servicebus", triggerProgress: 0.1, peakProgress: 0.22 },
   serviceBusDeadLetter: { label: "Service Bus dead-letter accumulation", zone: "servicebus", triggerProgress: 0.02, peakProgress: 0.15 },
   serviceBusToAutomation: { label: "Service Bus -> Automation handoff", zone: "automation", triggerProgress: 0, peakProgress: 0.04 },
+  automationActivation: { label: "Automation gate activation", zone: "automation", triggerProgress: 0.05, peakProgress: 0.15 },
   automationReport: { label: "Automation report card (act 3)", zone: "automation", triggerProgress: 0.75, peakProgress: 0.9 },
+  monitoringAnomaly: { label: "Monitoring anomaly detected", zone: "monitoring", triggerProgress: 0.05, peakProgress: 0.25 },
   monitoringSignal: { label: "Monitoring alert signal", zone: "monitoring", triggerProgress: 0.35, peakProgress: 0.85 },
   productionIncident: { label: "Production incident peak", zone: "production", triggerProgress: 0.25, peakProgress: 0.5 },
+  productionResponse: { label: "Production incident response", zone: "production", triggerProgress: 0.55, peakProgress: 0.65 },
+  drSecondaryReveal: { label: "DR secondary environment reveal", zone: "dr", triggerProgress: 0.15, peakProgress: 0.3 },
   drFailover: { label: "DR failover event", zone: "dr", triggerProgress: 0.35, peakProgress: 0.5 },
+  drStabilization: { label: "DR recovery stabilization", zone: "dr", triggerProgress: 0.75, peakProgress: 0.88 },
 };
 
 export const BEAT_ORDER: BeatId[] = [
@@ -74,10 +84,15 @@ export const BEAT_ORDER: BeatId[] = [
   "serviceBusFanout",
   "serviceBusDeadLetter",
   "serviceBusToAutomation",
+  "automationActivation",
   "automationReport",
+  "monitoringAnomaly",
   "monitoringSignal",
   "productionIncident",
+  "productionResponse",
+  "drSecondaryReveal",
   "drFailover",
+  "drStabilization",
 ];
 
 interface BeatSample {

@@ -22,6 +22,9 @@ const AKS_BEAT_THRESHOLDS = beatThresholds("aks");
 const NETWORK_BEAT_THRESHOLDS = beatThresholds("network");
 const SECURITY_BEAT_THRESHOLDS = beatThresholds("security");
 const SERVICEBUS_BEAT_THRESHOLDS = beatThresholds("servicebus");
+const AUTOMATION_BEAT_THRESHOLDS = beatThresholds("automation");
+const MONITORING_BEAT_THRESHOLDS = beatThresholds("monitoring");
+const PRODUCTION_BEAT_THRESHOLDS = beatThresholds("production");
 
 export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
   const openingStage = useOpeningStage(progressRef);
@@ -31,6 +34,9 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
   const networkStage = useZoneStage(progressRef, "network", NETWORK_BEAT_THRESHOLDS);
   const securityStage = useZoneStage(progressRef, "security", SECURITY_BEAT_THRESHOLDS);
   const servicebusStage = useZoneStage(progressRef, "servicebus", SERVICEBUS_BEAT_THRESHOLDS);
+  const automationStage = useZoneStage(progressRef, "automation", AUTOMATION_BEAT_THRESHOLDS);
+  const monitoringStage = useZoneStage(progressRef, "monitoring", MONITORING_BEAT_THRESHOLDS);
+  const productionStage = useZoneStage(progressRef, "production", PRODUCTION_BEAT_THRESHOLDS);
   const beatStage =
     zone === 1 ? pipelineStage
     : zone === 2 ? kubernetesStage
@@ -38,6 +44,9 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
     : zone === 4 ? networkStage
     : zone === 5 ? securityStage
     : zone === 6 ? servicebusStage
+    : zone === 7 ? automationStage
+    : zone === 8 ? monitoringStage
+    : zone === 9 ? productionStage
     : undefined;
   // The opening ritual and each zone's staged beats have their own
   // finer-grained key than the zone itself, so every line gets its own

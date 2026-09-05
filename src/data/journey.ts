@@ -97,23 +97,37 @@ export const sceneCaptions: SceneCaption[] = [
     eyebrow: "Scene 08",
     heading: "Automation",
     line: "If I have to do the same operational task repeatedly, I automate it.",
+    beats: [
+      { at: 0, heading: "Automation", line: "So I automate the repetitive work." },
+      { at: 0.15, heading: "Automation", line: "If something happens again and again, I shouldn't have to do it manually." },
+    ],
   },
   {
     id: "monitoring",
     eyebrow: "Scene 09",
     heading: "Observability",
     line: "Automation needs awareness — something has to notice when the system changes.",
+    beats: [
+      { at: 0, heading: "Observability", line: "But automation isn't enough." },
+      { at: 0.25, heading: "Observability", line: "I also need to know when something is wrong." },
+    ],
   },
   {
     id: "production",
     eyebrow: "Scene 10",
     heading: "Production",
     line: "And then production happens. The interesting part isn't preventing every failure — it's knowing how to recover.",
+    beats: [
+      { at: 0, heading: "Production", line: "And eventually…" },
+      { at: 0.15, heading: "Production", line: "production happens." },
+      { at: 0.55, heading: "Recovery", line: "The important part isn't preventing every failure." },
+      { at: 0.75, heading: "Recovery", line: "It's knowing how to recover." },
+    ],
   },
   {
     id: "dr",
     eyebrow: "Scene 11",
     heading: "Reliability",
-    line: "Production isn't the only place that needs to survive. Systems need a way back.",
+    line: "Because resilient systems need a way back.",
   },
 ];

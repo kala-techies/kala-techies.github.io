@@ -1292,6 +1292,12 @@ function ServiceBusScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       ))}
       {/* a slower, diverted stream — the messages that don't make it through cleanly */}
       <FlowPath points={[[-0.4, 0, 0], [0.2, -0.5, -0.3], [0.7, -0.65, -0.4]]} count={2} speed={0.05} color={RED} size={0.05} reducedMotion={reducedMotion} />
+      {/* the bridge into Stage 4: the dead-letter problem doesn't resolve
+          here, it continues forward — a thin stream of the same problem
+          events, still visible, heading toward where Automation will
+          pick them up. The DLQ itself is untouched; this only extends
+          what already leaves it. */}
+      <FlowPath points={[[0.7, -0.65, -0.4], [0.9, -0.9, -3.5], [1.1, -1.1, -7]]} count={3} speed={0.06} color={RED} size={0.045} reducedMotion={reducedMotion} />
     </group>
   );
 }
@@ -1321,7 +1327,10 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const validationRef = useRef<THREE.Mesh>(null);
   const validationMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const reportRef = useRef<THREE.Group>(null);
+  const gateRef = useRef<THREE.Mesh>(null);
+  const gateMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const activationScratch = useMemo(() => new THREE.Vector3(), []);
 
   const scattered = useMemo(
     () =>
@@ -1359,6 +1368,18 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     if (DEBUG_3D && scatteredMeshRef.current) {
       scatteredMeshRef.current.updateMatrixWorld(true);
       recordBeat("serviceBusToAutomation", scatteredMeshRef.current.getWorldPosition(automationDebugScratch), t);
+    }
+
+    // The gate activating — the moment the automation mechanism itself
+    // switches on, distinct from the chaos->order settle it drives. A
+    // sharp brightness/scale pulse rather than a fade, so it reads as a
+    // single event ("the mechanism turns on") not ambient shimmer.
+    const activation = Math.max(0, 1 - Math.abs(t - 0.15) / 0.1);
+    if (gateMatRef.current) gateMatRef.current.emissiveIntensity = 0.5 + activation * 1.1;
+    if (gateRef.current) gateRef.current.scale.setScalar(1 + activation * 0.25);
+    if (DEBUG_3D && gateRef.current) {
+      gateRef.current.updateMatrixWorld(true);
+      recordBeat("automationActivation", gateRef.current.getWorldPosition(activationScratch), t);
     }
 
     // ACT 1 — CHAOS -> ORDER (0 – 0.5)
@@ -1412,10 +1433,11 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
         <meshStandardMaterial color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />
       </instancedMesh>
 
-      {/* the automation gate the objects pass through as they organize */}
-      <mesh rotation={[0, Math.PI / 2, 0]}>
+      {/* the automation gate the objects pass through as they organize —
+          activates once, sharply, rather than sitting there pre-lit */}
+      <mesh ref={gateRef} rotation={[0, Math.PI / 2, 0]}>
         <torusGeometry args={[0.9, 0.1, 12, 32]} />
-        <meshStandardMaterial color={AMBER} emissive={AMBER} emissiveIntensity={0.7} />
+        <meshStandardMaterial ref={gateMatRef} color={AMBER} emissive={AMBER} emissiveIntensity={0.5} />
       </mesh>
       <FlowPath points={[[-3.6, 0.2, 0], [-1.2, 0.1, 0.4], [0, 0, 0], [1.4, 0, -0.1], [3.2, 0, 0]]} count={5} speed={0.1} color={AMBER} size={0.065} reducedMotion={reducedMotion} />
 
@@ -1459,26 +1481,55 @@ function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
   const ringRef = useRef<THREE.Mesh>(null);
   const signalRef = useRef<THREE.Mesh>(null);
   const signalMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const anomalyRef = useRef<THREE.Mesh>(null);
+  const anomalyMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const orbitRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const orbitMatRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
   const monitorDebugScratch = useMemo(() => new THREE.Vector3(), []);
+  const anomalyScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, delta) => {
     if (ringRef.current && !reducedMotion) ringRef.current.rotation.z += delta * 0.15;
 
+    const t = localProgress(progressRef.current, "monitoring");
+
+    // node 0 is the one that goes irregular — a normal orbiting pulse
+    // for most of the journey, then a dimmer, stuttering rhythm for the
+    // front third of this zone, back to steady once the signal has
+    // launched (the anomaly has been reported, not left unresolved).
+    const anomalyWindow = Math.max(0, 1 - smoothstep((t - 0.2) / 0.15));
     if (!reducedMotion) {
       MONITOR_NODES.forEach((n, i) => {
         const m = orbitRefs.current[i];
         if (!m) return;
-        const a = state.clock.elapsedTime * n.speed + i * 2;
+        const stutter = i === 0 ? 1 + Math.sin(state.clock.elapsedTime * 9) * anomalyWindow * 0.6 : 1;
+        const a = state.clock.elapsedTime * n.speed * stutter + i * 2;
         m.position.set(Math.cos(a) * n.r, Math.sin(a * 0.6) * 0.4, Math.sin(a) * n.r);
       });
+    }
+    const mat0 = orbitMatRefs.current[0];
+    if (mat0) mat0.emissiveIntensity = 0.8 - anomalyWindow * 0.55;
+
+    // the anomaly itself — a small marker that launches early (mirroring
+    // the signal's own "outrun the camera" trick below, just sooner),
+    // representing the irregular node's state being flagged before the
+    // signal carries that flag forward into Production.
+    const anomalyT = Math.max(0, Math.min(1, (t - 0.05) / 0.25));
+    if (anomalyRef.current && anomalyMatRef.current) {
+      anomalyRef.current.position.z = THREE.MathUtils.lerp(0, -9, smoothstep(anomalyT));
+      const fadeIn = smoothstep(anomalyT / 0.15);
+      const fadeOut = 1 - smoothstep((anomalyT - 0.75) / 0.25);
+      anomalyMatRef.current.opacity = 0.85 * fadeIn * fadeOut;
+      if (DEBUG_3D) {
+        anomalyRef.current.updateMatrixWorld(true);
+        recordBeat("monitoringAnomaly", anomalyRef.current.getWorldPosition(anomalyScratch), t);
+      }
     }
 
     // the first signal of the incident ahead — launches toward Production
     // in the back 40% of this zone and travels far enough to visibly cross
     // into it, fading only once it "arrives" rather than cutting off at
     // this zone's own boundary
-    const t = localProgress(progressRef.current, "monitoring");
     const alertT = Math.max(0, Math.min(1, (t - 0.35) / 0.55));
     if (signalRef.current && signalMatRef.current) {
       signalRef.current.position.z = THREE.MathUtils.lerp(0, -9, alertT);
@@ -1506,9 +1557,14 @@ function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
       {MONITOR_NODES.map((n, i) => (
         <mesh key={i} ref={(el) => { orbitRefs.current[i] = el; }}>
           <sphereGeometry args={[0.12, 12, 12]} />
-          <meshStandardMaterial color={n.color} emissive={n.color} emissiveIntensity={0.8} />
+          <meshStandardMaterial ref={(el) => { orbitMatRefs.current[i] = el; }} color={n.color} emissive={n.color} emissiveIntensity={0.8} />
         </mesh>
       ))}
+      {/* the anomaly flag — small, dim, launches early and quietly */}
+      <mesh ref={anomalyRef}>
+        <sphereGeometry args={[0.07, 10, 10]} />
+        <meshBasicMaterial ref={anomalyMatRef} color={RED} transparent opacity={0} />
+      </mesh>
       <mesh ref={signalRef}>
         <sphereGeometry args={[0.09, 10, 10]} />
         <meshBasicMaterial ref={signalMatRef} color={AMBER} transparent opacity={0} />
@@ -1519,6 +1575,8 @@ function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
 
 /* ------------------------- SCENE 10: PRODUCTION ---------------------------- */
 
+const PRODUCTION_HEALTHY_POS: THREE.Vector3Tuple = [2.4, 0.6, 0.4];
+
 function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
   const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
@@ -1526,7 +1584,11 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
   const alertRingRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   const alertMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const healthyMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const responseRef = useRef<THREE.Mesh>(null);
+  const responseMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const productionDebugScratch = useMemo(() => new THREE.Vector3(), []);
+  const responseScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, delta) => {
     if (ringRef.current) ringRef.current.rotation.z += delta * 0.3;
@@ -1565,6 +1627,28 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
       coreRef.current.updateMatrixWorld(true);
       recordBeat("productionIncident", coreRef.current.getWorldPosition(productionDebugScratch), t);
     }
+
+    // INCIDENT RESPONSE (0.55 – 0.8): investigation -> response ->
+    // stabilization, after the incident itself has peaked. Healthy
+    // capacity nearby brightens (it's what absorbs the load), and a
+    // focused marker travels from it to the core — the response path,
+    // not just a color change.
+    const responseT = Math.max(0, Math.min(1, (t - 0.55) / 0.25));
+    if (healthyMatRef.current) healthyMatRef.current.emissiveIntensity = 0.3 + smoothstep(responseT) * 0.7;
+    if (responseRef.current && responseMatRef.current) {
+      responseRef.current.position.lerpVectors(
+        new THREE.Vector3(...PRODUCTION_HEALTHY_POS),
+        new THREE.Vector3(0, 0, 0),
+        smoothstep(responseT)
+      );
+      const fadeIn = smoothstep(responseT / 0.2);
+      const fadeOut = 1 - smoothstep((responseT - 0.7) / 0.3);
+      responseMatRef.current.opacity = 0.9 * fadeIn * fadeOut;
+      if (DEBUG_3D) {
+        responseRef.current.updateMatrixWorld(true);
+        recordBeat("productionResponse", responseRef.current.getWorldPosition(responseScratch), t);
+      }
+    }
   });
 
   return (
@@ -1582,8 +1666,22 @@ function ProductionScene({ progressRef }: { progressRef: ScrollProgressRef }) {
         <torusGeometry args={[1.4, 0.03, 8, 48]} />
         <meshBasicMaterial ref={alertMatRef} color={AMBER} transparent opacity={0} />
       </mesh>
+      {/* healthy capacity — dim until the response window, when it's what
+          absorbs the rerouted load */}
+      <mesh position={PRODUCTION_HEALTHY_POS}>
+        <cylinderGeometry args={[0.32, 0.36, 0.4, 16]} />
+        <meshStandardMaterial ref={healthyMatRef} color={GREEN} emissive={GREEN} emissiveIntensity={0.3} roughness={0.5} metalness={0.3} />
+      </mesh>
+      {/* the response marker — travels from healthy capacity to the core:
+          investigation -> response, not just a color change */}
+      <mesh ref={responseRef}>
+        <icosahedronGeometry args={[0.09, 0]} />
+        <meshBasicMaterial ref={responseMatRef} color={GREEN} transparent opacity={0} />
+      </mesh>
       {/* traffic — an ambient loop past the core, always alive */}
       <FlowPath points={[[-2.6, 0.6, -1], [-0.6, 0.2, 0.6], [0.6, -0.2, -0.6], [2.6, -0.6, 1]]} count={5} speed={0.18} color={CYAN} size={0.05} />
+      {/* rerouted traffic — only flows toward healthy capacity during the response window */}
+      <FlowPath points={[[-1.8, 0.3, -0.6], [0, 0, 0], PRODUCTION_HEALTHY_POS]} count={4} speed={0.22} color={GREEN} size={0.05} />
     </group>
   );
 }
@@ -1597,8 +1695,10 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
   const groupRef = useRef<THREE.Group>(null);
   const beamRef = useRef<THREE.Mesh>(null);
   const primaryMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const secondaryRef = useRef<THREE.Mesh>(null);
   const secondaryMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const drDebugScratch = useMemo(() => new THREE.Vector3(), []);
+  const secondaryScratch = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state) => {
     // Same fixed-lead, own-zone-only tracking as Production — without it,
@@ -1622,11 +1722,28 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
       m.opacity = failoverPulse + (Math.sin(state.clock.elapsedTime * 1.5) + 1) * 0.15;
     }
 
+    // The secondary environment reveals itself before it ever takes over
+    // — a distinct beat from the failover event below, so the visitor
+    // registers "there's something else out there" before it becomes
+    // the active one.
+    const revealScale = smoothstep(t / 0.35);
+    if (secondaryRef.current) secondaryRef.current.scale.setScalar(Math.max(0.05, revealScale));
+    if (DEBUG_3D && secondaryRef.current) {
+      secondaryRef.current.updateMatrixWorld(true);
+      recordBeat("drSecondaryReveal", secondaryRef.current.getWorldPosition(secondaryScratch), t);
+    }
+
     if (DEBUG_3D && groupRef.current) {
       groupRef.current.updateMatrixWorld(true);
       drDebugScratch.set(0, 0.05, (DR_PRIMARY_LEAD + DR_SECONDARY_LEAD) / 2);
       groupRef.current.localToWorld(drDebugScratch);
       recordBeat("drFailover", drDebugScratch, t);
+    }
+
+    // Recovery stabilization — a distinct, later beat once the secondary
+    // has actually settled into steady health, not just "became active."
+    if (DEBUG_3D && secondaryRef.current) {
+      recordBeat("drStabilization", secondaryRef.current.getWorldPosition(secondaryScratch), t);
     }
   });
 
@@ -1638,7 +1755,7 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
         <icosahedronGeometry args={[1.1, 1]} />
         <meshStandardMaterial ref={primaryMatRef} color={CYAN} emissive={CYAN} emissiveIntensity={0.7} wireframe />
       </mesh>
-      <mesh position={[1, -0.2, DR_SECONDARY_LEAD]}>
+      <mesh ref={secondaryRef} position={[1, -0.2, DR_SECONDARY_LEAD]} scale={0.05}>
         <icosahedronGeometry args={[0.8, 1]} />
         <meshStandardMaterial ref={secondaryMatRef} color={VIOLET} emissive={VIOLET} emissiveIntensity={0.6} wireframe />
       </mesh>
