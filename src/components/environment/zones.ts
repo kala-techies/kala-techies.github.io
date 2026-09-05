@@ -95,8 +95,32 @@ export function revealBlend(progress: number, buffer = 0.03): number {
   return 1;
 }
 
+/** A triangular 0→1→0 bump centered exactly on a zone boundary, for camera
+ * flourishes at specific transitions (Kubernetes→AKS pulling back to
+ * reveal the Azure envelope, Monitoring→Production leaning into the
+ * incident) without introducing a new zone or touching localProgress —
+ * this is purely a camera-timing signal. */
+export function boundaryBlend(progress: number, boundary: number, rampWidth = 0.035): number {
+  const d = Math.abs(progress - boundary);
+  if (d >= rampWidth) return 0;
+  return 1 - d / rampWidth;
+}
+
+export function zoneBoundary(zoneId: ZoneId): number {
+  return ZONE_BOUNDARIES[ZONE_IDS.indexOf(zoneId)];
+}
+
 // Z-depth of each zone's centerpiece geometry (matches ZONE_Z above so the
-// camera is looking roughly at it mid-zone).
+// camera is looking roughly at it mid-zone). Production and DR track the
+// camera dynamically every frame instead (see HERO_LEAD in Scene.tsx) —
+// confirmed live earlier this session to be necessary for a compact,
+// off-axis object with a late climax. The wider, spread-out scenes below
+// (Kubernetes, Network, Security, etc.) use this simpler static anchor,
+// which earlier live verification confirmed renders acceptably across
+// their zones; late-triggering beats within them (AKS's node-pool scale-
+// in, Kubernetes' 4th node, Pipeline's multiply, Monitoring's signal) are
+// timed to complete with plenty of zone left afterward as a conservative
+// safety margin, rather than re-anchoring the whole group.
 export const Z = {
   pipeline: ZONE_Z[1],
   kubernetes: ZONE_Z[2],

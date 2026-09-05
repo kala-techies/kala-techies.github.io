@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Grid } from "@react-three/drei";
 import * as THREE from "three";
 import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
-import { Z, cameraZAtProgress, localProgress, revealBlend, withinZone } from "./zones";
+import { Z, boundaryBlend, cameraZAtProgress, localProgress, revealBlend, withinZone, zoneBoundary } from "./zones";
 
 // How far ahead of the camera a single-hero "climax" scene (one that
 // transforms based on local scroll progress, rather than being staggered
@@ -56,18 +56,41 @@ function ForegroundGlass({ camGroupRef }: { camGroupRef: RefObject<THREE.Group |
   );
 }
 
+// Camera flourishes tied to specific zone boundaries — not new zones,
+// just moments where the camera itself does something other than dolly
+// forward, so the journey reads as exploring architecture rather than a
+// single z-axis conveyor.
+const AKS_REVEAL_BOUNDARY = zoneBoundary("aks");
+const PRODUCTION_LEAN_BOUNDARY = zoneBoundary("production");
+const AUTOMATION_ARRIVE_BOUNDARY = zoneBoundary("automation");
+
 function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassRef: RefObject<THREE.Group | null> }) {
   const lightsRef = useRef<THREE.Group>(null);
 
   useFrame((state, delta) => {
     const { camera, pointer } = state;
     const progress = progressRef.current;
-    const targetZ = cameraZAtProgress(progress);
     const reveal = revealBlend(progress);
 
-    // Base path: dolly forward with a small pointer-driven parallax.
-    const baseX = pointer.x * 0.6;
-    const baseY = 1.4 + pointer.y * 0.25;
+    // Kubernetes -> AKS: the camera pulls back and rises, so the cluster is
+    // revealed to be inside a larger Azure envelope rather than the scene
+    // simply changing underneath an unmoved camera.
+    const aksReveal = boundaryBlend(progress, AKS_REVEAL_BOUNDARY, 0.05);
+    // Monitoring -> Production: the camera leans in and dips slightly,
+    // following the alert signal into the incident.
+    const productionLean = boundaryBlend(progress, PRODUCTION_LEAN_BOUNDARY, 0.03);
+    // Service Bus -> Automation: a small downward glance at the clutter
+    // arriving to be cleaned up.
+    const automationArrive = boundaryBlend(progress, AUTOMATION_ARRIVE_BOUNDARY, 0.025);
+
+    // A slow, continuous lateral/vertical drift independent of the mouse —
+    // cinematic movement that isn't only camera.position.z += scroll, and
+    // keeps working on touch devices with no pointer at all.
+    const lateralDrift = Math.sin(progress * 46) * 0.34;
+    const verticalDrift = Math.sin(progress * 29 + 1.4) * 0.2;
+
+    const baseX = pointer.x * 0.6 + lateralDrift;
+    const baseY = 1.4 + pointer.y * 0.25 + verticalDrift;
 
     // Reveal-zone modifier: crane the camera up and pivot the look target
     // from "ahead" to "behind" — the visitor has just built everything in
@@ -75,15 +98,22 @@ function Rig({ progressRef, glassRef }: { progressRef: ScrollProgressRef; glassR
     // than continuing to look into the still-empty road ahead (which only
     // holds text zones).
     const targetX = baseX;
-    const targetY = baseY + reveal * 22;
-    const lookAheadBase = 14;
-    const lookBehindDistance = 70;
+    const targetY = baseY + reveal * 24 + aksReveal * 6.5;
+    const targetZ = cameraZAtProgress(progress) + aksReveal * 7.5 - productionLean * 2.2;
+    const lookAheadBase = 15;
+    const lookBehindDistance = 76;
     const lookZOffset = THREE.MathUtils.lerp(-lookAheadBase, lookBehindDistance, reveal);
-    const lookY = -0.5 - reveal * 10;
+    const lookY = -0.5 - reveal * 10 - automationArrive * 1.4 - productionLean * 0.6;
 
     camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 5, delta);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3, delta);
     camera.position.z = THREE.MathUtils.damp(camera.position.z, targetZ, 3.2, delta);
+
+    // A gentle bank during the two biggest reveals — rolling the horizon
+    // slightly rather than always holding it level — resets to upright the
+    // instant the blend fades since it's recomputed fresh every frame.
+    const roll = aksReveal * 0.1 + reveal * 0.05;
+    camera.up.set(Math.sin(roll), Math.cos(roll), 0);
     camera.lookAt(targetX * 0.4, lookY, targetZ + lookZOffset);
 
     if (lightsRef.current) lightsRef.current.position.copy(camera.position);
@@ -177,7 +207,10 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
     if (buildRef.current && !reducedMotion) buildRef.current.rotation.y += delta * 0.4;
 
     const t = localProgress(progressRef.current, "pipeline");
-    const eased = smoothstep((t - 0.62) / 0.38);
+    // Triggers with the back 70% of the zone still ahead, not just the
+    // last sliver — the transformation needs to finish while the camera
+    // still has room to approach it, not exactly as the camera arrives.
+    const eased = smoothstep((t - 0.3) / 0.35);
 
     if (containerRef.current) {
       // the original container fades as its copies take over the frame
@@ -204,7 +237,12 @@ function PipelineScene({ progressRef, reducedMotion }: { progressRef: ScrollProg
       {/* CODE — a thin stream of particles flowing toward the build stage */}
       <FlowPath points={[[0, 0, 5], [0.15, 0.1, 3.6], [0, 0, 2.2]]} count={8} speed={0.35} color={CYAN} size={0.04} reducedMotion={reducedMotion} />
 
-      {/* BUILD — fragments assembling (a transformation, not a static shape) */}
+      {/* BUILD — a physical processing chamber the fragments assemble inside,
+          not fragments floating in open space */}
+      <mesh position={[0, 0, 1.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.62, 0.62, 0.5, 24, 1, true]} />
+        <meshStandardMaterial color={AZURE} wireframe transparent opacity={0.3} />
+      </mesh>
       <group ref={buildRef} position={[0, 0, 1.4]}>
         {buildFragments.map((p, i) => (
           <mesh key={i} position={p}>
@@ -268,7 +306,7 @@ function KubernetesScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     // through the back half of this zone — AKS node-pool scaling, made
     // physical rather than described.
     const t = localProgress(progressRef.current, "kubernetes");
-    const scaleIn = Math.max(0, (t - 0.55) / 0.45);
+    const scaleIn = Math.max(0, Math.min(1, (t - 0.35) / 0.4));
     if (scaleNodeRef.current) scaleNodeRef.current.scale.setScalar(scaleIn);
     if (scaleMatRef.current) scaleMatRef.current.opacity = scaleIn;
 
@@ -359,7 +397,7 @@ function AksScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressR
     if (envelopeRef.current && !reducedMotion) envelopeRef.current.rotation.y += delta * 0.03;
 
     const t = localProgress(progressRef.current, "aks");
-    const scaleIn = smoothstep((t - 0.42) / 0.4);
+    const scaleIn = smoothstep((t - 0.25) / 0.4);
     if (poolCRef.current) poolCRef.current.scale.setScalar(scaleIn);
     if (poolMatRef.current) poolMatRef.current.opacity = scaleIn * 0.9;
 
@@ -591,12 +629,17 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     []
   );
   const rotSeeds = useMemo(() => Array.from({ length: count }, (_, i) => i * 1.7), []);
+  // The chaos state starts dead-letter red — these are the same operational
+  // clutter Service Bus, just before this zone, showed diverting into a
+  // holding area. Automation is what turns that red clutter cyan.
+  const deadLetterColor = useMemo(() => new THREE.Color(RED), []);
   const slateColor = useMemo(() => new THREE.Color(SLATE), []);
   const cyanColor = useMemo(() => new THREE.Color(CYAN), []);
   const greenColor = useMemo(() => new THREE.Color(GREEN), []);
   const instanceColor = useMemo(() => new THREE.Color(), []);
+  const chaosColor = useMemo(() => new THREE.Color(), []);
 
-  useFrame(() => {
+  useFrame((state) => {
     const t = localProgress(progressRef.current, "automation");
 
     // ACT 1 — CHAOS -> ORDER (0 – 0.5)
@@ -605,16 +648,23 @@ function AutomationScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     const validationT = Math.max(0, Math.min(1, (t - 0.5) / 0.25));
     // ACT 3 — REPORT resolves (0.75 – 1)
     const reportT = smoothstep((t - 0.75) / 0.25);
+    // the red dead-letter tint bleeds into slate very early in the act,
+    // well before order sets in — the clutter arrives red, then dulls
+    // before it starts organizing
+    chaosColor.lerpColors(deadLetterColor, slateColor, smoothstep(t / 0.12));
 
     if (scatteredMeshRef.current) {
       for (let i = 0; i < count; i++) {
         dummy.position.lerpVectors(scattered[i], organized[i], orderEased);
-        dummy.rotation.set(rotSeeds[i] * (1 - orderEased), rotSeeds[i] * (1 - orderEased), 0);
+        // an idle wobble while still unordered — repetitive, manual motion
+        // that settles the instant an object organizes
+        const wobble = Math.sin(state.clock.elapsedTime * 2.2 + i * 1.9) * 0.5 * (1 - orderEased);
+        dummy.rotation.set(rotSeeds[i] * (1 - orderEased) + wobble, rotSeeds[i] * (1 - orderEased) - wobble, 0);
         dummy.updateMatrix();
         // validated cubes flash green as the sweep passes their column
         const col = i % 3;
         const passed = validationT > col / 3;
-        instanceColor.lerpColors(slateColor, passed ? greenColor : cyanColor, orderEased);
+        instanceColor.lerpColors(chaosColor, passed ? greenColor : cyanColor, orderEased);
         scatteredMeshRef.current.setColorAt(i, instanceColor);
         scatteredMeshRef.current.setMatrixAt(i, dummy.matrix);
       }
@@ -701,12 +751,16 @@ function MonitoringScene({ progressRef, reducedMotion }: { progressRef: ScrollPr
     }
 
     // the first signal of the incident ahead — launches toward Production
-    // in the back 40% of this zone
+    // in the back 40% of this zone and travels far enough to visibly cross
+    // into it, fading only once it "arrives" rather than cutting off at
+    // this zone's own boundary
     const t = localProgress(progressRef.current, "monitoring");
-    const alertT = Math.max(0, (t - 0.6) / 0.4);
+    const alertT = Math.max(0, Math.min(1, (t - 0.35) / 0.55));
     if (signalRef.current && signalMatRef.current) {
-      signalRef.current.position.z = THREE.MathUtils.lerp(0, -6.5, alertT);
-      signalMatRef.current.opacity = alertT > 0.02 && alertT < 0.96 ? 0.9 : 0;
+      signalRef.current.position.z = THREE.MathUtils.lerp(0, -9, alertT);
+      const fadeIn = smoothstep(alertT / 0.08);
+      const fadeOut = 1 - smoothstep((alertT - 0.82) / 0.18);
+      signalMatRef.current.opacity = 0.9 * fadeIn * fadeOut;
     }
   });
 
