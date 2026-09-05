@@ -408,7 +408,10 @@ function ProductionScene({ reducedMotion }: { reducedMotion: boolean }) {
   });
 
   return (
-    <group position={[0, 0, Z.production]}>
+    // Offset off the camera's direct path (x=0) — a solid core sitting
+    // dead-center gets flown straight into as the camera dollies through,
+    // filling the whole frame instead of reading as a composed scene.
+    <group position={[1.9, 0.2, Z.production]}>
       <mesh ref={coreRef}>
         <icosahedronGeometry args={[1.3, 2]} />
         <meshStandardMaterial ref={materialRef} color={CYAN} emissive={CYAN} emissiveIntensity={0.5} />

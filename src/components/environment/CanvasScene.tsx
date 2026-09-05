@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Canvas, useFrame, type RootState } from "@react-three/fiber";
+import { Canvas, type RootState } from "@react-three/fiber";
 import * as THREE from "three";
 import { Scene } from "./Scene";
 import type { ScrollProgressRef } from "../../hooks/useScrollProgress";
 
-// TEMP-DEBUG: exposes frame-loop liveness and a manual render trigger on
-// `window` for diagnosis from the browser console.
-function FrameCounter() {
-  useFrame(() => {
-    const w = window as unknown as { __frameCount?: number };
-    w.__frameCount = (w.__frameCount ?? 0) + 1;
-  });
-  return null;
-}
-
+/**
+ * Bundles the Canvas together with Scene so the entire Three.js/R3F/drei
+ * runtime stays inside one lazily-loaded chunk — importing `Canvas` at the
+ * ScrollEnvironment level (which is mounted eagerly) would otherwise pull
+ * all of it into the main bundle regardless of whether Scene itself is
+ * lazy.
+ *
+ * Size is applied explicitly on creation and on window resize rather than
+ * left to R3F's own ResizeObserver-based auto-measurement, which was
+ * unreliable in production. This is plain Three.js (renderer.setSize),
+ * not R3F-specific.
+ */
 export function CanvasScene({
   progressRef,
   reducedMotion,
@@ -37,20 +39,6 @@ export function CanvasScene({
     (state: RootState) => {
       stateRef.current = state;
       applySize();
-
-      const w = window as unknown as {
-        __r3fState?: RootState;
-        __manualRender?: () => { rendered: boolean; error?: string };
-      };
-      w.__r3fState = state;
-      w.__manualRender = () => {
-        try {
-          state.gl.render(state.scene, state.camera);
-          return { rendered: true };
-        } catch (e) {
-          return { rendered: false, error: String(e) };
-        }
-      };
     },
     [applySize]
   );
@@ -63,12 +51,10 @@ export function CanvasScene({
   return (
     <Canvas
       onCreated={handleCreated}
-      frameloop="always"
       dpr={[1, 1.5]}
       camera={{ position: [0, 0.6, 8], fov: 50 }}
-      gl={{ antialias: true, alpha: true, powerPreference: "high-performance", preserveDrawingBuffer: true }}
+      gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
     >
-      <FrameCounter />
       <Scene progressRef={progressRef} reducedMotion={reducedMotion} />
     </Canvas>
   );
