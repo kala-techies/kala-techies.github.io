@@ -35,7 +35,14 @@ export type BeatId =
   | "productionResponse"
   | "drSecondaryReveal"
   | "drFailover"
-  | "drStabilization";
+  | "drStabilization"
+  | "revealTransition"
+  | "impactMarker1"
+  | "impactMarker2"
+  | "recommendationMarker1"
+  | "recommendationMarker2"
+  | "recommendationMarker3"
+  | "identityReveal";
 
 export interface BeatMeta {
   label: string;
@@ -71,6 +78,13 @@ export const BEAT_META: Record<BeatId, BeatMeta> = {
   drSecondaryReveal: { label: "DR secondary environment reveal", zone: "dr", triggerProgress: 0.15, peakProgress: 0.3 },
   drFailover: { label: "DR failover event", zone: "dr", triggerProgress: 0.35, peakProgress: 0.5 },
   drStabilization: { label: "DR recovery stabilization", zone: "dr", triggerProgress: 0.5, peakProgress: 0.55 },
+  revealTransition: { label: "Reveal: environment calms", zone: "reveal", triggerProgress: 0, peakProgress: 0.1 },
+  impactMarker1: { label: "Impact marker 1 (Renan)", zone: "impact", triggerProgress: 0, peakProgress: 0.15 },
+  impactMarker2: { label: "Impact marker 2 (Manjunath)", zone: "impact", triggerProgress: 0.2, peakProgress: 0.3 },
+  recommendationMarker1: { label: "Recommendation marker 1 (Ana)", zone: "recommendations", triggerProgress: 0, peakProgress: 0.12 },
+  recommendationMarker2: { label: "Recommendation marker 2 (Deiva)", zone: "recommendations", triggerProgress: 0.35, peakProgress: 0.45 },
+  recommendationMarker3: { label: "Recommendation marker 3 (placeholder)", zone: "recommendations", triggerProgress: 0.6, peakProgress: 0.7 },
+  identityReveal: { label: "Identity reveal (Kala)", zone: "recommendations", triggerProgress: 0.85, peakProgress: 0.92 },
 };
 
 export const BEAT_ORDER: BeatId[] = [
@@ -93,6 +107,13 @@ export const BEAT_ORDER: BeatId[] = [
   "drSecondaryReveal",
   "drFailover",
   "drStabilization",
+  "revealTransition",
+  "impactMarker1",
+  "impactMarker2",
+  "recommendationMarker1",
+  "recommendationMarker2",
+  "recommendationMarker3",
+  "identityReveal",
 ];
 
 interface BeatSample {

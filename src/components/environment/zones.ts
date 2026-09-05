@@ -132,6 +132,7 @@ export const Z = {
   monitoring: ZONE_Z[8],
   production: ZONE_Z[9],
   dr: ZONE_Z[10],
+  reveal: ZONE_Z[11],
   impact: ZONE_Z[12],
   recommendations: ZONE_Z[13],
   work: ZONE_Z[14],

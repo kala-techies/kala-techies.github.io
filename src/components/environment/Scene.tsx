@@ -1776,18 +1776,160 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
   );
 }
 
-/* --------------------------- IMPACT / RECOMMENDATIONS ---------------------- */
+/* --------------------------- SCENE 12: REVEAL ------------------------------ */
+// Stage 4 was failure -> response -> recovery. This is the exhale after
+// it: the road opens up, the environment calms, and one quiet marker —
+// not a new system to explain — settles in ahead. Deliberately the
+// sparsest scene in the whole journey so far.
 
-function GlassMoment({ z, tint = "#dff6ff" }: { z: number; tint?: string }) {
+const REVEAL_Z_OFFSET = -5;
+
+function RevealScene({ progressRef, reducedMotion }: { progressRef: ScrollProgressRef; reducedMotion: boolean }) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  const ringMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const revealScratch = useMemo(() => new THREE.Vector3(), []);
+
+  useFrame((_, delta) => {
+    if (ringRef.current && !reducedMotion) ringRef.current.rotation.z += delta * 0.04;
+
+    // a slow settle, not a pulse — the environment calming rather than
+    // announcing itself
+    const t = localProgress(progressRef.current, "reveal");
+    if (ringMatRef.current) ringMatRef.current.opacity = 0.22 + smoothstep(t / 0.3) * 0.22;
+    if (DEBUG_3D && ringRef.current) {
+      ringRef.current.updateMatrixWorld(true);
+      recordBeat("revealTransition", ringRef.current.getWorldPosition(revealScratch), t);
+    }
+  });
+
   return (
-    <group position={[0, 0.4, z]}>
-      <mesh rotation={[0, 0.12, 0]}>
-        <planeGeometry args={[8, 4.4]} />
-        <meshPhysicalMaterial color={tint} transparent opacity={0.06} clearcoat={1} clearcoatRoughness={0.15} side={THREE.DoubleSide} />
+    <group position={[0, 0.3, Z.reveal + REVEAL_Z_OFFSET]}>
+      <mesh ref={ringRef} rotation={[Math.PI / 2.2, 0, 0]}>
+        <torusGeometry args={[2.6, 0.015, 8, 64]} />
+        <meshBasicMaterial ref={ringMatRef} color="#eaf6ff" transparent opacity={0.22} />
       </mesh>
-      <mesh rotation={[0, 0.12, 0]} position={[0, 0, -0.02]}>
-        <planeGeometry args={[8, 4.4]} />
-        <meshBasicMaterial color={CYAN} transparent opacity={0.06} wireframe side={THREE.DoubleSide} />
+    </group>
+  );
+}
+
+/* --------------------------- SCENE 13: IMPACT (recognition) ---------------- */
+// Organizational recognition, made physical: two plain upright markers
+// — not a screenshot wall — that only brighten as the rider actually
+// reaches each one, then stay lit behind us as the road continues.
+
+const IMPACT_Z_OFFSET = -5;
+const IMPACT_MARKER_X = [-1.2, 1];
+const IMPACT_WINDOWS: [number, number][] = [
+  [0, 0.15],
+  [0.2, 0.32],
+];
+
+function ImpactScene({ progressRef }: { progressRef: ScrollProgressRef }) {
+  const matRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
+  const meshRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const scratch = useMemo(() => new THREE.Vector3(), []);
+  const beatIds = ["impactMarker1", "impactMarker2"] as const;
+
+  useFrame(() => {
+    const t = localProgress(progressRef.current, "impact");
+    IMPACT_WINDOWS.forEach(([start, end], i) => {
+      const mat = matRefs.current[i];
+      if (mat) mat.emissiveIntensity = 0.12 + smoothstep((t - start) / (end - start)) * 0.5;
+    });
+    if (DEBUG_3D) {
+      meshRefs.current.forEach((m, i) => {
+        if (!m) return;
+        m.updateMatrixWorld(true);
+        recordBeat(beatIds[i], m.getWorldPosition(scratch), t);
+      });
+    }
+  });
+
+  return (
+    <group position={[0, 0.2, Z.impact + IMPACT_Z_OFFSET]}>
+      {IMPACT_MARKER_X.map((x, i) => (
+        <mesh key={x} ref={(el) => { meshRefs.current[i] = el; }} position={[x, 0, 0]} rotation={[0, x > 0 ? -0.2 : 0.2, 0]}>
+          <planeGeometry args={[0.9, 1.3]} />
+          <meshStandardMaterial ref={(el) => { matRefs.current[i] = el; }} color={AMBER} emissive={AMBER} emissiveIntensity={0.12} transparent opacity={0.85} side={THREE.DoubleSide} roughness={0.4} metalness={0.2} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/* ----------------------- SCENE 14: RECOMMENDATIONS -------------------------- */
+// Three human markers — the third left as a plain, dimmer outline until
+// there's a real quote for it — then the person behind all of it,
+// arriving last as a small point of light rather than a resume header.
+
+// Deeper than Impact/Reveal's usual -5: this zone also hosts the
+// identity reveal right near its end, and a -5 offset would put that
+// beat's crossover well before it (same math as every other short
+// zone this project). -9 pushes the crossover past local progress 1 —
+// same reasoning as Automation's own -9 for its back-loaded structure.
+const RECOMMENDATIONS_Z_OFFSET = -9;
+const RECOMMENDATION_MARKER_X = [-1.2, 0, 1.2];
+const RECOMMENDATION_WINDOWS: [number, number][] = [
+  [0, 0.12],
+  [0.35, 0.45],
+  [0.6, 0.7],
+];
+
+function RecommendationsScene({ progressRef }: { progressRef: ScrollProgressRef }) {
+  const matRefs = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
+  const meshRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const identityRef = useRef<THREE.Mesh>(null);
+  const identityMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const scratch = useMemo(() => new THREE.Vector3(), []);
+  const beatIds = ["recommendationMarker1", "recommendationMarker2", "recommendationMarker3"] as const;
+
+  useFrame(() => {
+    const t = localProgress(progressRef.current, "recommendations");
+    RECOMMENDATION_WINDOWS.forEach(([start, end], i) => {
+      const mat = matRefs.current[i];
+      if (mat) mat.emissiveIntensity = 0.12 + smoothstep((t - start) / (end - start)) * 0.5;
+    });
+    if (DEBUG_3D) {
+      meshRefs.current.forEach((m, i) => {
+        if (!m) return;
+        m.updateMatrixWorld(true);
+        recordBeat(beatIds[i], m.getWorldPosition(scratch), t);
+      });
+    }
+
+    // the person, arriving last — a quiet point of light, not a card
+    const identityT = smoothstep((t - 0.8) / 0.15);
+    if (identityRef.current) identityRef.current.scale.setScalar(Math.max(0.05, identityT));
+    if (identityMatRef.current) identityMatRef.current.emissiveIntensity = 0.3 + identityT * 0.8;
+    if (DEBUG_3D && identityRef.current) {
+      identityRef.current.updateMatrixWorld(true);
+      recordBeat("identityReveal", identityRef.current.getWorldPosition(scratch), t);
+    }
+  });
+
+  return (
+    <group position={[0, 0.2, Z.recommendations + RECOMMENDATIONS_Z_OFFSET]}>
+      {RECOMMENDATION_MARKER_X.map((x, i) => (
+        <mesh key={x} ref={(el) => { meshRefs.current[i] = el; }} position={[x, 0, 0]} rotation={[0, x === 0 ? 0 : x > 0 ? -0.2 : 0.2, 0]}>
+          <planeGeometry args={[0.9, 1.3]} />
+          <meshStandardMaterial
+            ref={(el) => { matRefs.current[i] = el; }}
+            color={VIOLET}
+            emissive={VIOLET}
+            emissiveIntensity={0.12}
+            transparent
+            opacity={i === 2 ? 0.35 : 0.85}
+            wireframe={i === 2}
+            side={THREE.DoubleSide}
+            roughness={0.4}
+            metalness={0.2}
+          />
+        </mesh>
+      ))}
+      {/* the person — small, warm, arrives last */}
+      <mesh ref={identityRef} position={[0, 1.1, 0.6]} scale={0.05}>
+        <icosahedronGeometry args={[0.22, 1]} />
+        <meshStandardMaterial ref={identityMatRef} color="#eaf6ff" emissive={CYAN} emissiveIntensity={0.3} roughness={0.3} metalness={0.4} />
       </mesh>
     </group>
   );
@@ -1831,8 +1973,9 @@ export function Scene({ progressRef, reducedMotion = false }: { progressRef: Scr
       <MonitoringScene progressRef={progressRef} reducedMotion={reducedMotion} />
       <ProductionScene progressRef={progressRef} />
       <DisasterRecoveryScene progressRef={progressRef} />
-      <GlassMoment z={Z.impact} tint="#f5b642" />
-      <GlassMoment z={Z.recommendations} tint="#dff6ff" />
+      <RevealScene progressRef={progressRef} reducedMotion={reducedMotion} />
+      <ImpactScene progressRef={progressRef} />
+      <RecommendationsScene progressRef={progressRef} />
 
       <ForegroundGlass camGroupRef={glassRef} />
     </>

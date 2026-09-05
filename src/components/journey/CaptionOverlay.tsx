@@ -25,6 +25,13 @@ const SERVICEBUS_BEAT_THRESHOLDS = beatThresholds("servicebus");
 const AUTOMATION_BEAT_THRESHOLDS = beatThresholds("automation");
 const MONITORING_BEAT_THRESHOLDS = beatThresholds("monitoring");
 const PRODUCTION_BEAT_THRESHOLDS = beatThresholds("production");
+// Reveal/Impact/Recommendations pull from profile.ts, not journey.ts —
+// their thresholds are declared directly rather than derived from a
+// `beats` array, but they use the exact same useZoneStage mechanism as
+// every other staged zone.
+const REVEAL_THRESHOLDS = [0, 0.25, 0.5, 0.75];
+const IMPACT_THRESHOLDS = [0, 0.2];
+const RECOMMENDATIONS_THRESHOLDS = [0, 0.35, 0.6, 0.85];
 
 export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRef: ScrollProgressRef }) {
   const openingStage = useOpeningStage(progressRef);
@@ -37,6 +44,9 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
   const automationStage = useZoneStage(progressRef, "automation", AUTOMATION_BEAT_THRESHOLDS);
   const monitoringStage = useZoneStage(progressRef, "monitoring", MONITORING_BEAT_THRESHOLDS);
   const productionStage = useZoneStage(progressRef, "production", PRODUCTION_BEAT_THRESHOLDS);
+  const revealStage = useZoneStage(progressRef, "reveal", REVEAL_THRESHOLDS);
+  const impactStage = useZoneStage(progressRef, "impact", IMPACT_THRESHOLDS);
+  const recommendationsStage = useZoneStage(progressRef, "recommendations", RECOMMENDATIONS_THRESHOLDS);
   const beatStage =
     zone === 1 ? pipelineStage
     : zone === 2 ? kubernetesStage
@@ -47,6 +57,9 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
     : zone === 7 ? automationStage
     : zone === 8 ? monitoringStage
     : zone === 9 ? productionStage
+    : zone === 11 ? revealStage
+    : zone === 12 ? impactStage
+    : zone === 13 ? recommendationsStage
     : undefined;
   // The opening ritual and each zone's staged beats have their own
   // finer-grained key than the zone itself, so every line gets its own
@@ -68,9 +81,9 @@ export function CaptionOverlay({ zone, progressRef }: { zone: number; progressRe
         >
           {zone === 0 && <OpeningCaption stage={openingStage} />}
           {zone >= 1 && zone <= 10 && <SceneCaption index={zone - 1} beatStage={beatStage} />}
-          {zone === 11 && <RevealCaption />}
-          {zone === 12 && <ImpactCaption />}
-          {zone === 13 && <RecommendationsCaption />}
+          {zone === 11 && <RevealCaption stage={revealStage} />}
+          {zone === 12 && <ImpactCaption stage={impactStage} />}
+          {zone === 13 && <RecommendationsCaption stage={recommendationsStage} />}
           {zone === 14 && <WorkCaption />}
           {zone === 15 && <ConnectCaption />}
         </motion.div>
@@ -127,45 +140,60 @@ function SceneCaption({ index, beatStage }: { index: number; beatStage?: number 
   );
 }
 
-function RevealCaption() {
+// Stage 0 is deliberately silent — the environment calming after Stage
+// 4's incident/recovery arc gets a moment with no caption at all before
+// the line below arrives. Same "one sentence, pause, one sentence"
+// pacing as every other staged zone, just with real silence at the
+// start instead of a first sentence.
+const REVEAL_LINES = ["That's the technology.", "But that's not really the story.", "The story is keeping all of it working together."];
+
+function RevealCaption({ stage }: { stage: number }) {
+  if (stage === 0) return null;
   return (
     <div className="mx-auto max-w-lg text-center">
-      <p className="font-mono text-xs tracking-widest text-cyan uppercase">That's the stack</p>
-      <h2 className="mt-2 text-2xl font-semibold text-ink sm:text-3xl">
-        The technology is only half the story — the real work is keeping all of it working together.
-      </h2>
+      <h2 className="text-2xl font-semibold text-ink sm:text-3xl">{REVEAL_LINES[stage - 1]}</h2>
     </div>
   );
 }
 
-function ImpactCaption() {
+// Organizational recognition, one acknowledgement at a time — reached
+// and passed like the physical markers in the scene, not a list
+// dumped on screen at once.
+function ImpactCaption({ stage }: { stage: number }) {
+  const r = recognitions[Math.min(stage, recognitions.length - 1)];
   return (
     <div className="max-w-md">
       <p className="font-mono text-xs tracking-widest text-amber uppercase">What people noticed</p>
-      <div className="mt-3 space-y-4">
-        {recognitions.map((r) => (
-          <div key={r.name}>
-            <p className="text-ink-dim">{r.work}</p>
-            <p className="mt-1 text-sm italic text-ink-faint">&ldquo;{r.quote}&rdquo; — {r.name}</p>
-          </div>
-        ))}
-      </div>
+      <p className="mt-2 text-ink-dim">{r.work}</p>
+      <p className="mt-1 text-sm italic text-ink-faint">&ldquo;{r.quote}&rdquo; — {r.name}</p>
     </div>
   );
 }
 
-function RecommendationsCaption() {
-  return (
-    <div className="max-w-lg">
-      <p className="font-mono text-xs tracking-widest text-cyan uppercase">Recommended</p>
-      <div className="mt-3 space-y-5">
-        {recommendations.map((r) => (
-          <div key={r.name}>
-            <p className="text-ink-dim">&ldquo;{r.text}&rdquo;</p>
-            <p className="mt-1.5 text-sm font-medium text-ink">{r.name} <span className="font-normal text-ink-faint">— {r.title}</span></p>
-          </div>
-        ))}
+function RecommendationsCaption({ stage }: { stage: number }) {
+  if (stage >= recommendations.length + 1) {
+    return (
+      <div className="max-w-md">
+        <p className="text-ink-dim">That's the work.</p>
+        <h2 className="mt-2 text-3xl font-semibold text-ink sm:text-4xl">I'm Kala.</h2>
+        <p className="mt-1 text-ink-dim">{profile.title}.</p>
       </div>
+    );
+  }
+  if (stage >= recommendations.length) {
+    return (
+      <div className="max-w-md">
+        <p className="font-mono text-xs tracking-widest text-cyan uppercase">Recommended</p>
+        <p className="mt-2 text-ink-faint italic">A third perspective — coming soon.</p>
+      </div>
+    );
+  }
+  const r = recommendations[stage];
+  return (
+    <div className="max-w-md">
+      <p className="font-mono text-xs tracking-widest text-cyan uppercase">Recommended</p>
+      <p className="mt-2 text-ink-dim">&ldquo;{r.text}&rdquo;</p>
+      <p className="mt-1.5 text-sm font-medium text-ink">{r.name} <span className="font-normal text-ink-faint">— {r.title}</span></p>
     </div>
   );
 }
