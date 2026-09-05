@@ -1740,8 +1740,15 @@ function DisasterRecoveryScene({ progressRef }: { progressRef: ScrollProgressRef
       recordBeat("drFailover", drDebugScratch, t);
     }
 
-    // Recovery stabilization — a distinct, later beat once the secondary
-    // has actually settled into steady health, not just "became active."
+    // Recovery stabilization — secondaryHealth already reaches full
+    // (1.0) at t=0.6, so "stabilized" is true well before this zone
+    // ends; peak is measured shortly after that, not late in the zone.
+    // Measured with ?debug3d=1: a first attempt at peak 0.88 landed deep
+    // inside the reveal camera's own pull-back ramp (it starts ramping
+    // in at this zone's own boundary with Reveal, not just at Reveal's
+    // start) — the camera swings up and back for that flourish, which
+    // this beat has no reason to compete with. Peak 0.55, still safely
+    // before that ramp engages, reads the same "stabilized" state.
     if (DEBUG_3D && secondaryRef.current) {
       recordBeat("drStabilization", secondaryRef.current.getWorldPosition(secondaryScratch), t);
     }
