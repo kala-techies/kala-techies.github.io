@@ -66,7 +66,7 @@ export function CanvasScene({
       frameloop="always"
       dpr={[1, 1.5]}
       camera={{ position: [0, 0.6, 8], fov: 50 }}
-      gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+      gl={{ antialias: true, alpha: true, powerPreference: "high-performance", preserveDrawingBuffer: true }}
     >
       <FrameCounter />
       <Scene progressRef={progressRef} reducedMotion={reducedMotion} />
